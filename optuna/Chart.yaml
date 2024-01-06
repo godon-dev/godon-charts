@@ -1,0 +1,13 @@
+apiVersion: v2
+description: Optuna Helm Chart for godon optimizer
+name: optuna
+version: 0.0.1
+appVersion: 3.4.0
+home: https://github.com/cherusk/godon-charts/optuna/
+maintainers:
+  - name: cherusk
+    url: https://github.com/cherusk
+sources:
+  - https://github.com/cherusk/godon-charts/tree/main/optuna
+keywords:
+  - optuna
