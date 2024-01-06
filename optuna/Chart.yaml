@@ -11,3 +11,8 @@ sources:
   - https://github.com/cherusk/godon-charts/tree/main/optuna
 keywords:
   - optuna
+dependencies:
+  - name: dask
+    version: 2024.1.0
+    repository: https://helm.dask.org/
+    condition: dask.enabled
