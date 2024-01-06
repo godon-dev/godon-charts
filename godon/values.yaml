@@ -1,15 +1,6 @@
 ---
 
 ########################################
-## CONFIG | optuna Configs
-########################################
-optuna:
-  image:
-    repository: docker.io/optuna/optuna
-    tag: "v3.5.0-py3.10"
-    pullPolicy: IfNotPresent
-
-########################################
 ## CONFIG | DASK Configs
 ########################################
 dask:

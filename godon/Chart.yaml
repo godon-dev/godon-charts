@@ -1,16 +1,26 @@
 apiVersion: v2
-description: Optuna Helm Chart for godon optimizer
-name: optuna
+description: Helm Chart for godon optimizer stack
+name: godon
 version: 0.0.1
-appVersion: 3.4.0
-home: https://github.com/cherusk/godon-charts/optuna/
+appVersion: 0.0.3
+home: https://github.com/cherusk/godon-charts/godon
 maintainers:
   - name: cherusk
     url: https://github.com/cherusk
 sources:
   - https://github.com/cherusk/godon-charts/tree/main/optuna
 keywords:
-  - optuna
+  - performance
+  - optimization
+  - metaheuristic-algorithms
+  - configurator
+  - operations
+  - continuous-optimization
+  - heterogenous-computing
+  - cloud-operations
+  - tuning
+  - configurator
+  - cooperative-metaheuristics
 dependencies:
   - name: dask
     version: 2024.1.0
