@@ -26,3 +26,11 @@ dependencies:
     version: 2024.1.0
     repository: https://helm.dask.org/
     condition: dask.enabled
+  - name: postgres
+    version: 13.2.27
+    repository: https://charts.bitnami.com/bitnami
+    alias: locking-db
+  - name: postgres
+    version: 13.2.27
+    repository: https://charts.bitnami.com/bitnami
+    alias: metadata-db
