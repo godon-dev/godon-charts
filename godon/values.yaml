@@ -1,0 +1,33 @@
+---
+
+########################################
+## CONFIG | optuna Configs
+########################################
+optuna:
+  image:
+    repository: docker.io/optuna/optuna
+    tag: "v3.5.0-py3.10"
+    pullPolicy: IfNotPresent
+
+########################################
+## CONFIG | DASK Configs
+########################################
+dask:
+  ## The Dask entrypoint is the scheduler
+  scheduler:
+    name: Optuna-Dask-Scheduler
+    enabled: true
+    image:
+      repository: "ghcr.io/dask/dask" # Container image repository.
+      tag: "2023.12.1" # Container image tag.
+      pullPolicy: IfNotPresent # Container image pull policy.
+    servicePort: 8786
+
+  ## The Dask Workers
+  worker:
+    name: Optuna-Dask-Worker # Dask worker name.
+    image:
+      repository: "ghcr.io/dask/dask" # Container image repository.
+      tag: "2023.12.1" # Container image tag.
+      pullPolicy: IfNotPresent # Container image pull policy.
+    replicas: 3
