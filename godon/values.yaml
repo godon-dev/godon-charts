@@ -47,3 +47,12 @@ metadata-db:
     password: meta_data
     database: meta_data
 
+archive-db:
+  image:
+    repository: "docker.io/yugabytedb/yugabyte"
+    tag: 2.18.1.0-b84
+    pullPolicy: IfNotPresent
+
+  replicas:
+    master: 3
+    tserver: 3
