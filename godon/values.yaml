@@ -56,3 +56,21 @@ archive-db:
   replicas:
     master: 3
     tserver: 3
+
+########################################
+## CONFIG | Nats Queueing System
+########################################
+nats:
+  container:
+    image:
+      repository: nats
+      tag: nats:2.9.15
+  nats:
+    port: 4222
+    tls:
+      enabled: false
+  monitor:
+    enabled: true
+    port: 8222
+    tls:
+      enabled: false
