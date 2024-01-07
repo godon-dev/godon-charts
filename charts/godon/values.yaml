@@ -88,8 +88,8 @@ archive-db:
     pullPolicy: IfNotPresent
 
   replicas:
-    master: 3
-    tserver: 3
+    master: 1
+    tserver: 0
 
   master:
     extraEnv:
