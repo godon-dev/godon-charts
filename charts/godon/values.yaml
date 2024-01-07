@@ -28,7 +28,7 @@ global:
   DLM_DB_DATABASE: distributed_locking
   NATS_SERVER_URL: nats//godon_nats_14222
   DASK_OPTUNA_SCHEDULER_URL: dask-scheduler-optuna8786
-  PROMETHEUS_URL: http//prometheus9090
+    #PROMETHEUS_URL: http//prometheus9090
 
 
 ########################################
