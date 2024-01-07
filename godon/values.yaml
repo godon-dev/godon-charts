@@ -32,7 +32,7 @@ global:
 
 
 ########################################
-## CONFIG | DASK Configs
+## Component | Dask Cluster for Distributed Metaheuristics Processing
 ########################################
 dask:
   enabled: true
@@ -56,6 +56,9 @@ dask:
       pullPolicy: IfNotPresent # Container image pull policy.
     replicas: 3
 
+########################################
+## Component | Postgres Based Distributed Locking Database
+########################################
 locking-db:
   image:
     repository: "docker.io/postgres/postgres/"
