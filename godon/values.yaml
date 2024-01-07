@@ -57,6 +57,11 @@ archive-db:
     master: 3
     tserver: 3
 
+  master:
+    extraEnv:
+      - name: YSQL_DB
+        value: archive-db
+
 ########################################
 ## CONFIG | Nats Queueing System
 ########################################
