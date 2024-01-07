@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "godon/**"
+      - "charts/**"
 
 jobs:
   lint_and_install:
