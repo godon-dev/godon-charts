@@ -41,13 +41,13 @@ jobs:
 
       - name: Create kind Cluster
         # specific commit is used because no tagged version includes `kubectl_version` feature
-        uses: helm/kind-action@deab45fc8df9de5090a604e8ec11778eea7170bd
+        uses: helm/kind-action@v1.8.0
         if: ${{ steps.list-changed.outputs.CHANGED == 'true' }}
         timeout-minutes: 5
         with:
-          version: v0.14.0
-          kubectl_version: v1.24.0
-          node_image: kindest/node:v1.24.0@sha256:0866296e693efe1fed79d5e6c7af8df71fc73ae45e3679af05342239cdc5bc8e
+          version: v0.20.0
+          kubectl_version: v1.26.4
+          node_image: kindest/node:v1.29.0@sha256:54a50c9354f11ce0aa56a85d2cacb1b950f85eab3fe1caf988826d1f89bf37eb
           wait: 300s
 
       - name: Install Charts (chart-testing)
