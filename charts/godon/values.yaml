@@ -61,7 +61,7 @@ dask:
 ########################################
 locking-db:
   image:
-    repository: "docker.io/postgres/postgres/"
+    repository: "postgres"
     tag: 13
     pullPolicy: IfNotPresent
 
@@ -72,7 +72,7 @@ locking-db:
 
 metadata-db:
   image:
-    repository: "docker.io/postgres/postgres/"
+    repository: "postgres"
     tag: 13
     pullPolicy: IfNotPresent
 
