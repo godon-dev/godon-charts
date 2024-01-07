@@ -24,7 +24,7 @@ keywords:
 dependencies:
   - name: dask
     version: 2024.1.0
-    repository: https://helm.dask.org/
+    repository: https://helm.dask.org
     condition: dask.enabled
   - name: postgresql
     version: 13.2.27
@@ -40,4 +40,4 @@ dependencies:
     alias: archive-db
   - name: nats
     version: 1.1.6
-    repository: https://nats-io.github.io/k8s/helm/charts/
+    repository: https://nats-io.github.io/k8s/helm/charts
