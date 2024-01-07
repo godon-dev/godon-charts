@@ -1,0 +1,43 @@
+apiVersion: v2
+description: Helm Chart for godon optimizer stack
+name: godon
+version: 0.0.1
+appVersion: 0.0.3
+home: https://github.com/cherusk/godon-charts/godon
+maintainers:
+  - name: cherusk
+    url: https://github.com/cherusk
+sources:
+  - https://github.com/cherusk/godon-charts/tree/main/optuna
+keywords:
+  - performance
+  - optimization
+  - metaheuristic-algorithms
+  - configurator
+  - operations
+  - continuous-optimization
+  - heterogenous-computing
+  - cloud-operations
+  - tuning
+  - configurator
+  - cooperative-metaheuristics
+dependencies:
+  - name: dask
+    version: 2024.1.0
+    repository: https://helm.dask.org/
+    condition: dask.enabled
+  - name: postgres
+    version: 13.2.27
+    repository: https://charts.bitnami.com/bitnami
+    alias: locking-db
+  - name: postgres
+    version: 13.2.27
+    repository: https://charts.bitnami.com/bitnami
+    alias: metadata-db
+  - name: yugabytedb
+    version: 2.20.1
+    repository: https://charts.yugabyte.com
+    alias: archive-db
+  - name: nats
+    version: 1.1.6
+    repository: https://nats-io.github.io/k8s/helm/charts/
