@@ -64,7 +64,6 @@ locking-db:
     repository: "postgres"
     tag: 13
     pullPolicy: IfNotPresent
-
   auth:
     username: locking
     password: locking
@@ -75,26 +74,25 @@ metadata-db:
     repository: "postgres"
     tag: 13
     pullPolicy: IfNotPresent
-
   auth:
     username: meta_data
     password: meta_data
     database: meta_data
 
-archive-db:
-  image:
-    repository: "docker.io/yugabytedb/yugabyte"
-    tag: 2.18.1.0-b84
-    pullPolicy: IfNotPresent
-
-  replicas:
-    master: 1
-    tserver: 0
-
-  master:
-    extraEnv:
-      - name: YSQL_DB
-        value: archive-db
+#  archive-db:
+#    image:
+#      repository: "docker.io/yugabytedb/yugabyte"
+#      tag: 2.18.1.0-b84
+#      pullPolicy: IfNotPresent
+#
+#    replicas:
+#      master: 1
+#      tserver: 0
+#
+#    master:
+#      extraEnv:
+#        - name: YSQL_DB
+#          value: archive-db
 
 ########################################
 ## CONFIG | Nats Queueing System

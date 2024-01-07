@@ -34,10 +34,10 @@ dependencies:
     version: 13.2.27
     repository: https://charts.bitnami.com/bitnami
     alias: metadata-db
-  - name: yugabyte
-    version: 2.19.3
-    repository: https://charts.yugabyte.com
-    alias: archive-db
+#  - name: yugabyte
+#    version: 2.19.3
+#    repository: https://charts.yugabyte.com
+#    alias: archive-db
   - name: nats
     version: 1.1.6
     repository: https://nats-io.github.io/k8s/helm/charts
