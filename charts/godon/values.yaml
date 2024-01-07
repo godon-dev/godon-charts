@@ -3,32 +3,32 @@
 ########################################
 ## CONFIG | Global Variables
 ########################################
-global:
-  AIRFLOW__CORE__ENABLE_XCOM_PICKLING: true
-  AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: True
-  AIRFLOW__CORE__EXECUTOR: DaskExecutor
-  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2//airflowairflow@airflow-db/airflow
-  AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2//airflowairflow@airflow-db/airflow
-  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: False
-  AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
-  AIRFLOW__API__AUTH_BACKEND: airflow.api.auth.backend.basic_auth
-  AIRFLOW__DASK__CLUSTER_ADDRESS: tcp//dask-scheduler-airflow8786
-  ARCHIVE_DB_USER: yugabyte
-  ARCHIVE_DB_PASSWORD: yugabyte
-  ARCHIVE_DB_HOSTNAME: archive-db
-  ARCHIVE_DB_PORT: 5433
-  ARCHIVE_DB_DATABASE: archive_db
-  META_DB_USER: meta_data
-  META_DB_PASSWORD: meta_data
-  META_DB_HOSTNAME: meta-data-db
-  META_DB_PORT: 5432
-  DLM_DB_USER: locking
-  DLM_DB_PASSWORD: locking
-  DLM_DB_HOST: locks_db
-  DLM_DB_DATABASE: distributed_locking
-  NATS_SERVER_URL: nats//godon_nats_14222
-  DASK_OPTUNA_SCHEDULER_URL: dask-scheduler-optuna8786
-    #PROMETHEUS_URL: http//prometheus9090
+#  global:
+#    AIRFLOW__CORE__ENABLE_XCOM_PICKLING: true
+#    AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: True
+#    AIRFLOW__CORE__EXECUTOR: DaskExecutor
+#    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2//airflowairflow@airflow-db/airflow
+#    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2//airflowairflow@airflow-db/airflow
+#    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: False
+#    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+#    AIRFLOW__API__AUTH_BACKEND: airflow.api.auth.backend.basic_auth
+#    AIRFLOW__DASK__CLUSTER_ADDRESS: tcp//dask-scheduler-airflow8786
+#    ARCHIVE_DB_USER: yugabyte
+#    ARCHIVE_DB_PASSWORD: yugabyte
+#    ARCHIVE_DB_HOSTNAME: archive-db
+#    ARCHIVE_DB_PORT: 5433
+#    ARCHIVE_DB_DATABASE: archive_db
+#    META_DB_USER: meta_data
+#    META_DB_PASSWORD: meta_data
+#    META_DB_HOSTNAME: meta-data-db
+#    META_DB_PORT: 5432
+#    DLM_DB_USER: locking
+#    DLM_DB_PASSWORD: locking
+#    DLM_DB_HOST: locks_db
+#    DLM_DB_DATABASE: distributed_locking
+#    NATS_SERVER_URL: nats//godon_nats_14222
+#    DASK_OPTUNA_SCHEDULER_URL: dask-scheduler-optuna8786
+#    PROMETHEUS_URL: http//prometheus9090
 
 
 ########################################
@@ -42,18 +42,18 @@ dask:
     name: Optuna-Dask-Scheduler
     enabled: true
     image:
-      repository: "ghcr.io/dask/dask" # Container image repository.
-      tag: "2023.12.1" # Container image tag.
-      pullPolicy: IfNotPresent # Container image pull policy.
+      repository: "ghcr.io/dask/dask"
+      tag: "2023.12.1"
+      pullPolicy: IfNotPresent
     servicePort: 8786
 
   ## The Dask Workers
   worker:
-    name: Optuna-Dask-Worker # Dask worker name.
+    name: Optuna-Dask-Worker
     image:
-      repository: "ghcr.io/dask/dask" # Container image repository.
-      tag: "2023.12.1" # Container image tag.
-      pullPolicy: IfNotPresent # Container image pull policy.
+      repository: "ghcr.io/dask/dask"
+      tag: "2023.12.1"
+      pullPolicy: IfNotPresent
     replicas: 3
 
 ########################################
@@ -61,10 +61,9 @@ dask:
 ########################################
 locking-db:
   image:
-    repository: "docker.io/postgres/postgres/"
+    repository: "postgres"
     tag: 13
     pullPolicy: IfNotPresent
-
   auth:
     username: locking
     password: locking
@@ -72,29 +71,28 @@ locking-db:
 
 metadata-db:
   image:
-    repository: "docker.io/postgres/postgres/"
+    repository: "postgres"
     tag: 13
     pullPolicy: IfNotPresent
-
   auth:
     username: meta_data
     password: meta_data
     database: meta_data
 
-archive-db:
-  image:
-    repository: "docker.io/yugabytedb/yugabyte"
-    tag: 2.18.1.0-b84
-    pullPolicy: IfNotPresent
-
-  replicas:
-    master: 3
-    tserver: 3
-
-  master:
-    extraEnv:
-      - name: YSQL_DB
-        value: archive-db
+#  archive-db:
+#    image:
+#      repository: "docker.io/yugabytedb/yugabyte"
+#      tag: 2.18.1.0-b84
+#      pullPolicy: IfNotPresent
+#
+#    replicas:
+#      master: 1
+#      tserver: 0
+#
+#    master:
+#      extraEnv:
+#        - name: YSQL_DB
+#          value: archive-db
 
 ########################################
 ## CONFIG | Nats Queueing System
@@ -103,7 +101,7 @@ nats:
   container:
     image:
       repository: nats
-      tag: nats:2.9.15
+      tag: 2.9.15
   nats:
     port: 4222
     tls:
