@@ -69,6 +69,9 @@ locking-db:
     password: locking
     database: locking
 
+########################################
+## Component | Postgres Database Storing Godon Components Meta Data
+########################################
 metadata-db:
   image:
     repository: "postgres"
@@ -79,6 +82,9 @@ metadata-db:
     password: meta_data
     database: meta_data
 
+########################################
+## Component | Knowledge Archive Database for Cooperating Config Breeders
+########################################
 archive-db:
 
   enabled: false
