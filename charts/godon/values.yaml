@@ -87,7 +87,34 @@ archive-db:
 
   replicas:
     master: 1
-    tserver: 0
+    tserver: 1
+
+  storage:
+    ephemeral: false
+    master:
+      count: 1
+      size: 1Gi
+      storageClass: ""
+    tserver:
+      count: 1
+      size: 1Gi
+      storageClass: ""
+
+  resource:
+    master:
+      requests:
+        cpu: "0.2"
+        memory: 200Mi
+      limits:
+        cpu: "0.5"
+        memory: 500Mi
+    tserver:
+      requests:
+        cpu: "0.2"
+        memory: 200Mi
+      limits:
+        cpu: "0.5"
+        memory: 500Mi
 
   master:
     extraEnv:
