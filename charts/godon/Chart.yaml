@@ -38,6 +38,7 @@ dependencies:
     version: 2.19.3
     repository: https://charts.yugabyte.com
     alias: archive-db
+    condition: archive-db.enabled
   - name: nats
     version: 1.1.6
     repository: https://nats-io.github.io/k8s/helm/charts

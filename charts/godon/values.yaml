@@ -80,6 +80,9 @@ metadata-db:
     database: meta_data
 
 archive-db:
+
+  enabled: false
+
   image:
     repository: "docker.io/yugabytedb/yugabyte"
     tag: 2.18.1.0-b84
