@@ -79,20 +79,52 @@ metadata-db:
     password: meta_data
     database: meta_data
 
-#  archive-db:
-#    image:
-#      repository: "docker.io/yugabytedb/yugabyte"
-#      tag: 2.18.1.0-b84
-#      pullPolicy: IfNotPresent
-#
-#    replicas:
-#      master: 1
-#      tserver: 0
-#
-#    master:
-#      extraEnv:
-#        - name: YSQL_DB
-#          value: archive-db
+archive-db:
+
+  enabled: false
+
+  image:
+    repository: "docker.io/yugabytedb/yugabyte"
+    tag: 2.18.1.0-b84
+    pullPolicy: IfNotPresent
+
+  replicas:
+    master: 1
+    tserver: 1
+
+  storage:
+    ephemeral: false
+    master:
+      count: 1
+      size: 1Gi
+      storageClass: ""
+    tserver:
+      count: 1
+      size: 1Gi
+      storageClass: ""
+
+  resource:
+    master:
+      requests:
+        cpu: "0.2"
+        memory: 200Mi
+      limits:
+        cpu: "0.5"
+        memory: 500Mi
+    tserver:
+      requests:
+        cpu: "0.2"
+        memory: 200Mi
+      limits:
+        cpu: "0.5"
+        memory: 500Mi
+
+  master:
+    extraEnv:
+      - name: YSQL_DB
+        value: archive-db
+
+  dnsPolicy: ClusterFirst
 
 ########################################
 ## CONFIG | Nats Queueing System

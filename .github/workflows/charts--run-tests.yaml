@@ -53,4 +53,4 @@ jobs:
       - name: Install Charts (chart-testing)
         if: ${{ steps.list-changed.outputs.CHANGED == 'true' }}
         run: |
-          ct install --config chart-testing-config.yaml
+          ct install --debug --config chart-testing-config.yaml
