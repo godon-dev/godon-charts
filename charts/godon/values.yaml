@@ -121,6 +121,8 @@ archive-db:
       - name: YSQL_DB
         value: archive-db
 
+  dnsPolicy: ClusterFirst
+
 ########################################
 ## CONFIG | Nats Queueing System
 ########################################
