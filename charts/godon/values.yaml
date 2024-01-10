@@ -13,11 +13,7 @@
 #    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
 #    AIRFLOW__API__AUTH_BACKEND: airflow.api.auth.backend.basic_auth
 #    AIRFLOW__DASK__CLUSTER_ADDRESS: tcp//dask-scheduler-airflow8786
-#    ARCHIVE_DB_USER: yugabyte
-#    ARCHIVE_DB_PASSWORD: yugabyte
-#    ARCHIVE_DB_HOSTNAME: archive-db
 #    ARCHIVE_DB_PORT: 5433
-#    ARCHIVE_DB_DATABASE: archive_db
 #    META_DB_USER: meta_data
 #    META_DB_PASSWORD: meta_data
 #    META_DB_HOSTNAME: meta-data-db
@@ -154,7 +150,13 @@ archive-db:
   master:
     extraEnv:
       - name: YSQL_DB
-        value: archive-db
+        value: archive_db
+
+  authCredentials:
+    ysql:
+      user: yugabyte
+      password: yugabyte
+      database: archive_db
 
   dnsPolicy: ClusterFirst
 
