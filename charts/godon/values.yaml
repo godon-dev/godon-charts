@@ -53,6 +53,10 @@ api:
 
   serviceAccountName: ""
 
+  volumes: []
+
+  volumeMounts: []
+
 ########################################
 ## Component | Dask Cluster for Distributed Metaheuristics Processing
 ########################################

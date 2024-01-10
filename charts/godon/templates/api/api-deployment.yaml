@@ -55,3 +55,5 @@ spec:
             failureThreshold: {{ .Values.api.livenessProbe.failureThreshold }}
             timeoutSeconds: {{ .Values.api.livenessProbe.timeoutSeconds }}
           {{- end }}
+          volumeMounts: {{ .Values.api.volumeMounts }}
+          volumes: {{ .Values.api.volumes }}
