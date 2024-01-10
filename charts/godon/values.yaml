@@ -13,19 +13,7 @@
 #    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
 #    AIRFLOW__API__AUTH_BACKEND: airflow.api.auth.backend.basic_auth
 #    AIRFLOW__DASK__CLUSTER_ADDRESS: tcp//dask-scheduler-airflow8786
-#    ARCHIVE_DB_USER: yugabyte
-#    ARCHIVE_DB_PASSWORD: yugabyte
-#    ARCHIVE_DB_HOSTNAME: archive-db
 #    ARCHIVE_DB_PORT: 5433
-#    ARCHIVE_DB_DATABASE: archive_db
-#    META_DB_USER: meta_data
-#    META_DB_PASSWORD: meta_data
-#    META_DB_HOSTNAME: meta-data-db
-#    META_DB_PORT: 5432
-#    DLM_DB_USER: locking
-#    DLM_DB_PASSWORD: locking
-#    DLM_DB_HOST: locks_db
-#    DLM_DB_DATABASE: distributed_locking
 #    NATS_SERVER_URL: nats//godon_nats_14222
 #    DASK_OPTUNA_SCHEDULER_URL: dask-scheduler-optuna8786
 #    PROMETHEUS_URL: http//prometheus9090
@@ -93,7 +81,7 @@ locking-db:
   auth:
     username: locking
     password: locking
-    database: locking
+    database: distributed_locking
 
 ########################################
 ## Component | Postgres Database Storing Godon Components Meta Data
@@ -154,7 +142,13 @@ archive-db:
   master:
     extraEnv:
       - name: YSQL_DB
-        value: archive-db
+        value: archive_db
+
+  authCredentials:
+    ysql:
+      user: yugabyte
+      password: yugabyte
+      database: archive_db
 
   dnsPolicy: ClusterFirst
 
