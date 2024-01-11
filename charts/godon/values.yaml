@@ -13,9 +13,13 @@
 #    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
 #    AIRFLOW__API__AUTH_BACKEND: airflow.api.auth.backend.basic_auth
 #    AIRFLOW__DASK__CLUSTER_ADDRESS: tcp//dask-scheduler-airflow8786
-#    NATS_SERVER_URL: nats//godon_nats_14222
-#    DASK_OPTUNA_SCHEDULER_URL: dask-scheduler-optuna8786
 #    PROMETHEUS_URL: http//prometheus9090
+
+
+########################################
+## Network | Godon DNS Domain
+########################################
+domainName: "cluster.local"
 
 ########################################
 ## Component | Godon API

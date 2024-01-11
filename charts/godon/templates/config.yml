@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "godon.fullname" . }}-config-envs
+  labels:
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+## we must use `data` rather than `stringData` (see: https://github.com/helm/helm/issues/10010)
+data:
+  ## ================
+  ## Service Interaction Configs
+  ## ================
+  ## queuing system service host/port
+  SVC_NATS_HOST: {{ printf "%s-nats.%s.svc.%s" (include "godon.fullname" .) (.Release.Namespace) (.Values.clusterDomain) | b64enc | quote }}
+  SVC_NATS_PORT: {{ "14222" | b64enc | quote }}
+
+  ## processing parallelization service host/port
+  SVC_DASK_PROTOCOL: {{ "tcp" | b64enc | quote }}
+  SVC_DASK_HOST: {{ printf "%s-dask.%s.svc.%s" (include "godon.fullname" .) (.Release.Namespace) (.Values.clusterDomain) | b64enc | quote }}
+  SVC_DASK_PORT: {{ "8786" | b64enc | quote }}
