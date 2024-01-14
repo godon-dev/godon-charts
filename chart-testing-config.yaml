@@ -8,4 +8,5 @@ chart-repos:
   - postgres=https://charts.bitnami.com/bitnami
   - yugabyte=https://charts.yugabyte.com
   - nats=https://nats-io.github.io/k8s/helm/charts
+  - airflow=oci://ghcr.io/cherusk/airflow
 helm-extra-args: --timeout=600s

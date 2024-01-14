@@ -42,3 +42,6 @@ dependencies:
   - name: nats
     version: 1.1.6
     repository: https://nats-io.github.io/k8s/helm/charts
+  - name: airflow # interim airflow with dask executor support
+    version: 10.0.0
+    repository: https://ghcr.io/cherusk/airflow
