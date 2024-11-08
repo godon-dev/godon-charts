@@ -22,6 +22,10 @@ keywords:
   - configurator
   - cooperative-metaheuristics
 dependencies:
+  - name: windmill
+    version: 2.0.312
+    repository: https://windmill-labs.github.io/windmill-helm-charts/
+    condition: windmill.enabled
   - name: dask
     version: 2024.1.0
     repository: https://helm.dask.org
