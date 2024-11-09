@@ -22,6 +22,17 @@
 domainName: "cluster.local"
 
 ########################################
+## Component | Windmill Workflow Orchestration Engine
+########################################
+windmill:
+  windmill:
+    appReplicas: 1
+    lspReplicas: 1
+    workerGroups:
+      - name: "default"
+        replicas: 1
+
+########################################
 ## Component | Godon API
 ########################################
 api:
