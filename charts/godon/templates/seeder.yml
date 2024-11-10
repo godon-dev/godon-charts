@@ -1,0 +1,20 @@
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: godon-seeder
+spec:
+  completions: 1
+  parallelism: 1
+
+  template:
+    spec:
+      containers:
+      - name: godon-seeder
+        image: {{ .Values.godon_seeder.image }}
+        env:
+        {{- with .Values.godon_seeder.env }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      restartPolicy: Never
+  backoffLimit: 2
