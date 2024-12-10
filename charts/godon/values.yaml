@@ -25,7 +25,7 @@ domainName: "cluster.local"
 ## Component | Godon Seeder Job
 ########################################
 godon_seeder:
-  image: ghcr.io/godon-dev/godon-seeder:0.0.1
+  image: ghcr.io/godon-dev/godon-seeder:0.0.2
   env:
     GODON_VERSION: 0.0.3
 
