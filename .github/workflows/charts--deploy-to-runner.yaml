@@ -14,4 +14,4 @@ jobs:
 
       - name: Deploy Latest Chart to k3s
         run: |
-          sudo kubectl apply -f charts/godon/
+          kubectl apply -f charts/godon/
