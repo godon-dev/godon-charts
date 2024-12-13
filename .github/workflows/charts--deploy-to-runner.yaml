@@ -12,6 +12,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch k3s cluster client config
+        run: |
+          kubectl config view --raw >> k3s_client_config.yaml
+
+      - name: Cleanup Former Deployment
+        run: |
+          helm uninstall godon --kubeconfig k3s_client_config.yaml --wait --ignore-not-found
+
       - name: Deploy Latest Chart to k3s
         run: |
-          kubectl apply -f charts/godon/
+          helm install godon ./charts/godon/ --kubeconfig k3s_client_config.yaml --dependency-update
