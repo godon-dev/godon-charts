@@ -1,0 +1,200 @@
+---
+
+########################################
+## CONFIG | Global Variables
+########################################
+#  global:
+#    AIRFLOW__CORE__ENABLE_XCOM_PICKLING: true
+#    AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: True
+#    AIRFLOW__CORE__EXECUTOR: DaskExecutor
+#    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2//airflowairflow@airflow-db/airflow
+#    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2//airflowairflow@airflow-db/airflow
+#    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: False
+#    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+#    AIRFLOW__API__AUTH_BACKEND: airflow.api.auth.backend.basic_auth
+#    AIRFLOW__DASK__CLUSTER_ADDRESS: tcp//dask-scheduler-airflow8786
+#    PROMETHEUS_URL: http//prometheus9090
+
+
+########################################
+## Network | Godon DNS Domain
+########################################
+domainName: "cluster.local"
+
+########################################
+## Component | Godon Seeder Job
+########################################
+godon_seeder:
+  image: ghcr.io/godon-dev/godon-seeder:0.0.2
+  env:
+  - name: GODON_VERSION
+    value: "0.0.3"
+
+########################################
+## Component | Windmill Workflow Orchestration Engine
+########################################
+windmill:
+  windmill:
+    appReplicas: 1
+    lspReplicas: 1
+    workerGroups:
+      - name: "default"
+        replicas: 1
+
+########################################
+## Component | Godon API
+########################################
+api:
+  image:
+    repository: "ghcr.io/cherusk/godon-api"
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+    pullSecret: ""
+
+  replicas: 1
+
+  port: 9090
+
+  env: []
+
+  livenessProbe:
+    enabled: false
+
+  annotations: {}
+
+  podLabels: {}
+
+  serviceAccountName: ""
+
+  volumes: []
+
+  volumeMounts: []
+
+########################################
+## Component | Dask Cluster for Distributed Metaheuristics Processing
+########################################
+dask:
+  enabled: true
+
+  ## The Dask entrypoint is the scheduler
+  scheduler:
+    name: Optuna-Dask-Scheduler
+    enabled: true
+    image:
+      repository: "ghcr.io/dask/dask"
+      tag: "2023.12.1"
+      pullPolicy: IfNotPresent
+    servicePort: 8786
+
+  ## The Dask Workers
+  worker:
+    name: Optuna-Dask-Worker
+    image:
+      repository: "ghcr.io/dask/dask"
+      tag: "2023.12.1"
+      pullPolicy: IfNotPresent
+    replicas: 3
+
+  ## Jupyter not needed
+  jupyter:
+    enabled: false
+
+########################################
+## Component | Postgres Based Distributed Locking Database
+########################################
+locking-db:
+  image:
+    repository: "postgres"
+    tag: 13
+    pullPolicy: IfNotPresent
+  auth:
+    username: locking
+    password: locking
+    database: distributed_locking
+
+########################################
+## Component | Postgres Database Storing Godon Components Meta Data
+########################################
+metadata-db:
+  image:
+    repository: "postgres"
+    tag: 13
+    pullPolicy: IfNotPresent
+  auth:
+    username: meta_data
+    password: meta_data
+    database: meta_data
+
+########################################
+## Component | Knowledge Archive Database for Cooperating Config Breeders
+########################################
+archive-db:
+
+  enabled: false
+
+  image:
+    repository: "docker.io/yugabytedb/yugabyte"
+    tag: 2.18.1.0-b84
+    pullPolicy: IfNotPresent
+
+  replicas:
+    master: 1
+    tserver: 1
+
+  storage:
+    ephemeral: false
+    master:
+      count: 1
+      size: 1Gi
+      storageClass: ""
+    tserver:
+      count: 1
+      size: 1Gi
+      storageClass: ""
+
+  resource:
+    master:
+      requests:
+        cpu: "0.2"
+        memory: 200Mi
+      limits:
+        cpu: "0.5"
+        memory: 500Mi
+    tserver:
+      requests:
+        cpu: "0.2"
+        memory: 200Mi
+      limits:
+        cpu: "0.5"
+        memory: 500Mi
+
+  master:
+    extraEnv:
+      - name: YSQL_DB
+        value: archive_db
+
+  authCredentials:
+    ysql:
+      user: yugabyte
+      password: yugabyte
+      database: archive_db
+
+  dnsPolicy: ClusterFirst
+
+########################################
+## CONFIG | Nats Queueing System
+########################################
+nats:
+  container:
+    image:
+      repository: nats
+      tag: 2.9.15
+  nats:
+    port: 4222
+    tls:
+      enabled: false
+  monitor:
+    enabled: true
+    port: 8222
+    tls:
+      enabled: false

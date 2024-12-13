@@ -22,5 +22,5 @@ jobs:
 
       - name: Deploy Latest Chart to k3s
         run: |
-          helm install godon ./charts/godon/ --kubeconfig k3s_client_config.yaml --dependency-update --namespace godon
+          helm install godon ./charts/godon/ --kubeconfig k3s_client_config.yaml --dependency-update --namespace godon --values ./charts/godon/osuosl_deploy_values.yml
 
