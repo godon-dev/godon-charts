@@ -14,9 +14,9 @@ jobs:
 
       - name: Cleanup Former Deployment
         run: |
-          helm uninstall godon --kubeconfig /run/kube_config.yaml --wait --ignore-not-found --namespace godon
+          helm uninstall godon --kubeconfig /run/kubeconfig.yaml --wait --ignore-not-found --namespace godon
 
       - name: Deploy Latest Chart to k3s
         run: |
-          helm install godon ./charts/godon/ --kubeconfig /run/kube_config.yaml --dependency-update --namespace godon --values ./charts/godon/osuosl_deploy_values.yml
+          helm install godon ./charts/godon/ --kubeconfig /run/kubeconfig.yaml --dependency-update --namespace godon --values ./charts/godon/osuosl_deploy_values.yml
 
