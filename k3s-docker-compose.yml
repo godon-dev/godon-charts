@@ -1,0 +1,53 @@
+## Docker Compose to enable k3s to run locally exclusively on single osuosl node
+
+services:
+  server:
+    image: "rancher/k3s:v1.31.3-k3s1-amd64"
+    command: server
+    tmpfs:
+    - /run
+    - /var/run
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    privileged: true
+    restart: always
+    environment:
+    - K3S_TOKEN=godon
+    - K3S_KUBECONFIG_OUTPUT=/output/kubeconfig.yaml
+    - K3S_KUBECONFIG_MODE=666
+    volumes:
+    - k3s-server:/var/lib/rancher/k3s
+    # This is just so that we get the kubeconfig file out
+    - /run:/output
+    ports:
+    - 127.0.0.1:6443:6443  # Kubernetes API Server
+    - 127.0.0.1:80:80      # Ingress controller port 80
+    - 127.0.0.1:443:443    # Ingress controller port 443
+
+  agent:
+    deploy:
+      mode: replicated
+      replicas: 3
+    image: "rancher/k3s:v1.31.3-k3s1-amd64"
+    tmpfs:
+    - /run
+    - /var/run
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    privileged: true
+    restart: always
+    environment:
+    - K3S_URL=https://server:6443
+    - K3S_TOKEN=godon
+    volumes:
+    - k3s-agent:/var/lib/rancher/k3s
+
+volumes:
+  k3s-server: {}
+  k3s-agent: {}

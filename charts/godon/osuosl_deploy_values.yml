@@ -35,11 +35,11 @@ godon_seeder:
 ########################################
 windmill:
   windmill:
-    appReplicas: 1
-    lspReplicas: 1
+    appReplicas: 2
+    lspReplicas: 0
     workerGroups:
       - name: "default"
-        replicas: 1
+        replicas: 3
 
 ########################################
 ## Component | Godon API
