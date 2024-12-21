@@ -25,10 +25,10 @@ domainName: "cluster.local"
 ## Component | Godon Seeder Job
 ########################################
 godon_seeder:
-  image: ghcr.io/godon-dev/godon-seeder:0.0.5
+  image: ghcr.io/godon-dev/godon-seeder:0.0.6
   env:
   - name: GODON_VERSION
-    value: "0.0.4"
+    value: "0.0.5"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
