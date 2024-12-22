@@ -185,6 +185,12 @@ archive-db:
 ## CONFIG | Nats Queueing System
 ########################################
 nats:
+  podDisruptionBudget:
+    enable: false
+  service:
+    enabled: false
+  natsBox:
+    enabled: false
   container:
     image:
       repository: nats
@@ -194,7 +200,7 @@ nats:
     tls:
       enabled: false
   monitor:
-    enabled: true
+    enabled: false
     port: 8222
     tls:
       enabled: false
