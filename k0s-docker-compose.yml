@@ -2,6 +2,7 @@
 
 ### k0s
 
+version: "3"
 services:
   kube_master:
     container_name: kube_master
@@ -18,7 +19,7 @@ services:
     hostname: kube_master
     privileged: true
     restart: always
-    cgroup: host
+    #cgroup: host
     deploy:
       resources:
         limits:
@@ -44,14 +45,14 @@ services:
     - /run
     - /var/run
     ports:
-      - "6443:6443"
+      - "127.0.0.1:6443:6443"
     network_mode: "bridge"
 
   kube_worker_1:
     image: docker.io/k0sproject/k0s:v1.31.5-k0s.0
     container_name: kube_worker_1
     hostname: kube_worker_1
-    cgroup: host
+    #cgroup: host
     deploy:
       resources:
         limits:
@@ -67,18 +68,18 @@ services:
     volumes:
       - "kube_master_shared:/shared"
       - "kube_worker_1:/var/lib/k0s"
-      - "./worker_join.sh:/shared/worker_join.sh"
+      - "/github-runner/godon-charts/godon-charts/:/script/"
     tmpfs:
     - /run
     - /var/run
     network_mode: "bridge"
-    command: /bin/sh /shared/worker_join.sh
+    command: /bin/sh /script/worker_join.sh
 
   kube_worker_2:
     image: docker.io/k0sproject/k0s:v1.31.5-k0s.0
     container_name: kube_worker_2
     hostname: kube_worker_2
-    cgroup: host
+    #cgroup: host
     deploy:
       resources:
         limits:
@@ -94,12 +95,12 @@ services:
     volumes:
       - "kube_master_shared:/shared"
       - "kube_worker_2:/var/lib/k0s"
-      - "./worker_join.sh:/shared/worker_join.sh"
+      - "/github-runner/godon-charts/godon-charts/:/script/"
     tmpfs:
     - /run
     - /var/run
     network_mode: "bridge"
-    command: /bin/sh /shared/worker_join.sh
+    command: /bin/sh /script/worker_join.sh
 
 volumes:
   kube_master_shared:
