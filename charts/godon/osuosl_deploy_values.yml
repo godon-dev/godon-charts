@@ -130,7 +130,7 @@ metadata-db:
 ########################################
 archive-db:
 
-  enabled: false
+  enabled: true
 
   image:
     repository: "docker.io/yugabytedb/yugabyte"
