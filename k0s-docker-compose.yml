@@ -1,0 +1,108 @@
+## Docker Compose to enable k0s to run locally exclusively on single osuosl node
+
+### k0s
+
+services:
+  kube_master:
+    container_name: kube_master
+    image: docker.io/k0sproject/k0s:v1.31.5-k0s.0
+    command: |
+      /bin/sh -c "
+      rm -rf /shared/join-token.env &&
+      k0s controller --config=/etc/k0s/config.yaml &
+      sleep 5 &&
+      mkdir -p /shared &&
+      k0s token create --role=worker --expiry=1h > /shared/join-token.env &&
+      wait
+      "
+    hostname: kube_master
+    privileged: true
+    restart: always
+    cgroup: host
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1g
+        reservations:
+          cpus: '0.5'
+          memory: 500m
+    volumes:
+      - "kube_master_shared:/shared"
+      - "kube_master:/var/lib/k0s"
+      # This is just so that we get the kubeconfig file out
+      - /run:/var/lib/k0s
+    network_mode: "bridge"
+    environment:
+      K0S_CONFIG: |-
+        apiVersion: k0s.k0sproject.io/v1beta1
+        kind: ClusterConfig
+        metadata:
+          name: k0s_kube_master
+        # Any additional configuration goes here ...
+    tmpfs:
+    - /run
+    - /var/run
+    ports:
+      - "6443:6443"
+    network_mode: "bridge"
+
+  kube_worker_1:
+    image: docker.io/k0sproject/k0s:v1.31.5-k0s.0
+    container_name: kube_worker_1
+    hostname: kube_worker_1
+    cgroup: host
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1g
+        reservations:
+          cpus: '0.5'
+          memory: 500m
+    privileged: true
+    restart: always
+    depends_on:
+      - kube_master
+    volumes:
+      - "kube_master_shared:/shared"
+      - "kube_worker_1:/var/lib/k0s"
+      - "./worker_join.sh:/shared/worker_join.sh"
+    tmpfs:
+    - /run
+    - /var/run
+    network_mode: "bridge"
+    command: /bin/sh /shared/worker_join.sh
+
+  kube_worker_2:
+    image: docker.io/k0sproject/k0s:v1.31.5-k0s.0
+    container_name: kube_worker_2
+    hostname: kube_worker_2
+    cgroup: host
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1g
+        reservations:
+          cpus: '0.5'
+          memory: 500m
+    privileged: true
+    restart: always
+    depends_on:
+      - kube_master
+    volumes:
+      - "kube_master_shared:/shared"
+      - "kube_worker_2:/var/lib/k0s"
+      - "./worker_join.sh:/shared/worker_join.sh"
+    tmpfs:
+    - /run
+    - /var/run
+    network_mode: "bridge"
+    command: /bin/sh /shared/worker_join.sh
+
+volumes:
+  kube_master_shared:
+  kube_master:
+  kube_worker_1:
+  kube_worker_2:

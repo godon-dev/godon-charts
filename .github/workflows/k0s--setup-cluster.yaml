@@ -1,4 +1,4 @@
-name: "Setup k3s as docker compose stack on osuosl runner"
+name: "Setup k0s as docker compose stack on osuosl runner"
 
 on:
   workflow_dispatch:
@@ -12,6 +12,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch k3s cluster client config
+      - name: Setup k0s cluster config
         run: |
-          docker-compose -f k3s-docker-compose.yml up -d
+          docker-compose -f k0s-docker-compose.yml up -d
