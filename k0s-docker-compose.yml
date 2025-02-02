@@ -4,8 +4,8 @@
 
 version: "3"
 services:
-  kube_master:
-    container_name: kube_master
+  kube-master:
+    container_name: kube-master
     image: docker.io/k0sproject/k0s:v1.31.5-k0s.0
     command: |
       /bin/sh -c "
@@ -16,7 +16,7 @@ services:
       k0s token create --role=worker --expiry=1h > /shared/join-token.env &&
       wait
       "
-    hostname: kube_master
+    hostname: kube-master
     privileged: true
     restart: always
     #cgroup: host
@@ -29,8 +29,8 @@ services:
           cpus: '0.5'
           memory: 500m
     volumes:
-      - "kube_master_shared:/shared"
-      - "kube_master:/var/lib/k0s"
+      - "kube-master-shared:/shared"
+      - "kube-master:/var/lib/k0s"
       # This is just so that we get the kubeconfig file out
       - /run:/var/lib/k0s
     network_mode: "bridge"
@@ -39,7 +39,7 @@ services:
         apiVersion: k0s.k0sproject.io/v1beta1
         kind: ClusterConfig
         metadata:
-          name: k0s_kube_master
+          name: k0s-kube-master
         # Any additional configuration goes here ...
     tmpfs:
     - /run
@@ -48,10 +48,10 @@ services:
       - "127.0.0.1:6443:6443"
     network_mode: "bridge"
 
-  kube_worker_1:
+  kube-worker-1:
     image: docker.io/k0sproject/k0s:v1.31.5-k0s.0
-    container_name: kube_worker_1
-    hostname: kube_worker_1
+    container_name: kube-worker-1
+    hostname: kube-worker-1
     #cgroup: host
     deploy:
       resources:
@@ -64,10 +64,10 @@ services:
     privileged: true
     restart: always
     depends_on:
-      - kube_master
+      - kube-master
     volumes:
-      - "kube_master_shared:/shared"
-      - "kube_worker_1:/var/lib/k0s"
+      - "kube-master-shared:/shared"
+      - "kube-worker-1:/var/lib/k0s"
       - "/github-runner/godon-charts/godon-charts/:/script/"
     tmpfs:
     - /run
@@ -75,10 +75,10 @@ services:
     network_mode: "bridge"
     command: /bin/sh /script/worker_join.sh
 
-  kube_worker_2:
+  kube-worker-2:
     image: docker.io/k0sproject/k0s:v1.31.5-k0s.0
-    container_name: kube_worker_2
-    hostname: kube_worker_2
+    container_name: kube-worker-2
+    hostname: kube-worker-2
     #cgroup: host
     deploy:
       resources:
@@ -91,10 +91,10 @@ services:
     privileged: true
     restart: always
     depends_on:
-      - kube_master
+      - kube-master
     volumes:
-      - "kube_master_shared:/shared"
-      - "kube_worker_2:/var/lib/k0s"
+      - "kube-master-shared:/shared"
+      - "kube-worker-2:/var/lib/k0s"
       - "/github-runner/godon-charts/godon-charts/:/script/"
     tmpfs:
     - /run
@@ -103,7 +103,7 @@ services:
     command: /bin/sh /script/worker_join.sh
 
 volumes:
-  kube_master_shared:
-  kube_master:
-  kube_worker_1:
-  kube_worker_2:
+  kube-master-shared:
+  kube-master:
+  kube-worker-1:
+  kube-worker-2:
