@@ -19,7 +19,7 @@ services:
     hostname: kube-master
     privileged: true
     restart: always
-    #cgroup: host
+    cgroup: host
     deploy:
       resources:
         limits:
@@ -32,7 +32,7 @@ services:
       - "kube-master-shared:/shared"
       - "kube-master:/var/lib/k0s"
       # This is just so that we get the kubeconfig file out
-      - /run:/var/lib/k0s
+      - /srv/k0s:/var/lib/k0s
     network_mode: "bridge"
     environment:
       K0S_CONFIG: |-
@@ -46,13 +46,12 @@ services:
     - /var/run
     ports:
       - "127.0.0.1:6443:6443"
-    network_mode: "bridge"
 
   kube-worker-1:
     image: docker.io/k0sproject/k0s:v1.31.5-k0s.0
     container_name: kube-worker-1
     hostname: kube-worker-1
-    #cgroup: host
+    cgroup: host
     deploy:
       resources:
         limits:
@@ -79,7 +78,7 @@ services:
     image: docker.io/k0sproject/k0s:v1.31.5-k0s.0
     container_name: kube-worker-2
     hostname: kube-worker-2
-    #cgroup: host
+    cgroup: host
     deploy:
       resources:
         limits:
