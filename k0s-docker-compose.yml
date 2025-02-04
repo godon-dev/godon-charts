@@ -32,7 +32,9 @@ services:
       - "kube-master-shared:/shared"
       - "kube-master:/var/lib/k0s"
       # This is just so that we get the kubeconfig file out
-      - /srv/k0s:/var/lib/k0s
+      - "/srv/k0s:/var/lib/k0s"
+      # for hostpath storage
+      - "/srv/:/srv/storage/"
     network_mode: "bridge"
     environment:
       K0S_CONFIG: |-
@@ -68,6 +70,8 @@ services:
       - "kube-master-shared:/shared"
       - "kube-worker-1:/var/lib/k0s"
       - "/github-runner/godon-charts/godon-charts/:/script/"
+      # for hostpath storage
+      - "/srv/:/srv/storage/"
     tmpfs:
     - /run
     - /var/run
@@ -95,6 +99,8 @@ services:
       - "kube-master-shared:/shared"
       - "kube-worker-2:/var/lib/k0s"
       - "/github-runner/godon-charts/godon-charts/:/script/"
+      # for hostpath storage
+      - "/srv/:/srv/storage/"
     tmpfs:
     - /run
     - /var/run
