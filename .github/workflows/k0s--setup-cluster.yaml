@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  setup_k3s:
+  setup_cluster:
     runs-on: [self-hosted, linux]
     steps:
       - name: Checkout
