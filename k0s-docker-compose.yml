@@ -32,7 +32,9 @@ services:
       - "kube-master-shared:/shared"
       - "kube-master:/var/lib/k0s"
       # This is just so that we get the kubeconfig file out
-      - /srv/k0s:/var/lib/k0s
+      - "/srv/k0s:/var/lib/k0s"
+      # for openebs hostpath storage
+      - "/srv/storage/:/var/openebs/local"
     network_mode: "bridge"
     environment:
       K0S_CONFIG: |-
@@ -40,7 +42,22 @@ services:
         kind: ClusterConfig
         metadata:
           name: k0s-kube-master
-        # Any additional configuration goes here ...
+        extensions:
+          helm:
+            repositories:
+            - name: openebs-internal
+              url: https://openebs.github.io/charts
+            charts:
+            - name: openebs
+              chartname: openebs-internal/openebs
+              version: "3.9.0"
+              namespace: openebs
+              order: 1
+              values: |
+                localprovisioner:
+                  hostpathClass:
+                    enabled: true
+                    isDefaultClass: false
     tmpfs:
     - /run
     - /var/run
@@ -68,6 +85,8 @@ services:
       - "kube-master-shared:/shared"
       - "kube-worker-1:/var/lib/k0s"
       - "/github-runner/godon-charts/godon-charts/:/script/"
+      # for openebs hostpath storage
+      - "/srv/storage/:/var/openebs/local"
     tmpfs:
     - /run
     - /var/run
@@ -95,6 +114,8 @@ services:
       - "kube-master-shared:/shared"
       - "kube-worker-2:/var/lib/k0s"
       - "/github-runner/godon-charts/godon-charts/:/script/"
+      # for openebs hostpath storage
+      - "/srv/storage/:/var/openebs/local"
     tmpfs:
     - /run
     - /var/run
