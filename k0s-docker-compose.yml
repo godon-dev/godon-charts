@@ -58,7 +58,7 @@ services:
                   localprovisioner:
                     hostpathClass:
                       enabled: true
-                      isDefaultClass: false
+                      isDefaultClass: true
     tmpfs:
     - /run
     - /var/run
