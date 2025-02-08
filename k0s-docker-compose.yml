@@ -32,7 +32,7 @@ services:
       - "kube-master-shared:/shared"
       - "kube-master:/var/lib/k0s"
       # This is just so that we get the kubeconfig file out
-      - "/srv/k0s:/var/lib/k0s"
+      - "/srv/k0s/pki/:/var/lib/k0s/pki/"
       # for openebs hostpath storage
       - "/srv/storage/:/var/openebs/local"
     network_mode: "bridge"
