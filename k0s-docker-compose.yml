@@ -35,6 +35,7 @@ services:
       - "/srv/k0s/pki/:/var/lib/k0s/pki/"
       # for openebs hostpath storage
       - "/srv/storage/:/var/openebs/local"
+      - "/run/udev/:/run/udev/"
     network_mode: "bridge"
     environment:
       K0S_CONFIG: |-
@@ -59,9 +60,6 @@ services:
                     hostpathClass:
                       enabled: true
                       isDefaultClass: true
-    tmpfs:
-    - /run
-    - /var/run
     ports:
       - "127.0.0.1:6443:6443"
 
@@ -88,9 +86,7 @@ services:
       - "/github-runner/godon-charts/godon-charts/:/script/"
       # for openebs hostpath storage
       - "/srv/storage/:/var/openebs/local"
-    tmpfs:
-    - /run
-    - /var/run
+      - "/run/udev/:/run/udev/"
     network_mode: "bridge"
     command: /bin/sh /script/worker_join.sh
 
@@ -117,9 +113,7 @@ services:
       - "/github-runner/godon-charts/godon-charts/:/script/"
       # for openebs hostpath storage
       - "/srv/storage/:/var/openebs/local"
-    tmpfs:
-    - /run
-    - /var/run
+      - "/run/udev/:/run/udev/"
     network_mode: "bridge"
     command: /bin/sh /script/worker_join.sh
 
