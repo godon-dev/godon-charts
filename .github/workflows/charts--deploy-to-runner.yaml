@@ -15,14 +15,14 @@ jobs:
       - name: Cleanup Former Deployment
         run: |
           helm uninstall godon \
-               --kubeconfig /srv/k0s/pki/admin.conf \
+               --kubeconfig /run/kind_kubeconfig.yaml \
                --wait --ignore-not-found \
                --namespace godon
 
       - name: Deploy Latest Chart to Local k0s Cluster
         run: |
           helm install godon ./charts/godon/ \
-               --kubeconfig /srv/k0s/pki/admin.conf \
+               --kubeconfig /run/kind_kubeconfig.yaml \
                --dependency-update \
                --create-namespace --namespace godon \
                --values ./charts/godon/osuosl_deploy_values.yml
