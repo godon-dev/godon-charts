@@ -93,7 +93,7 @@ dask:
       repository: "ghcr.io/dask/dask"
       tag: "2023.12.1"
       pullPolicy: IfNotPresent
-    replicas: 3
+    replicas: 2
 
   ## Jupyter not needed
   jupyter:
