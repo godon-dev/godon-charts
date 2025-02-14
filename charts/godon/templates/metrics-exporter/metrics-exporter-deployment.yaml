@@ -43,7 +43,7 @@ spec:
       serviceAccountName: {{ .Values.serviceAccountName }}
       containers:
         - name:  godon-metrics-exporter
-          {{- include "metrics_eporter.image" . | indent 10 }}
+          {{- include "metrics_exporter.image" . | indent 10 }}
           resources:
             {{- toYaml .Values.metrics_exporter.resources | nindent 12 }}
           env:

@@ -75,7 +75,7 @@ metrics_exporter:
 ########################################
 api:
   image:
-    repository: "ghcr.io/cherusk/godon-api"
+    repository: "ghcr.io/godon-dev/godon-api"
     tag: "0.0.1"
     pullPolicy: IfNotPresent
     pullSecret: ""
