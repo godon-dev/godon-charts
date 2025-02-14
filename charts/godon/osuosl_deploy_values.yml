@@ -42,6 +42,35 @@ windmill:
         replicas: 1
 
 ########################################
+## Component | Godon Metrics Exporter
+########################################
+metrics_exporter:
+  image:
+    repository: "ghcr.io/godon-dev/godon-metrics-exporter"
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+    pullSecret: ""
+
+  replicas: 1
+
+  port: 9099
+
+  env: []
+
+  livenessProbe:
+    enabled: false
+
+  annotations: {}
+
+  podLabels: {}
+
+  serviceAccountName: ""
+
+  volumes: []
+
+  volumeMounts: []
+
+########################################
 ## Component | Godon API
 ########################################
 api:

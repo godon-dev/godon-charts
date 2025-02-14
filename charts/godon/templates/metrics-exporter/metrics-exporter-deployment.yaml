@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "godon.fullname" . }}-metrics-exporter
+  {{- if .Values.metrics_exporter.annotations }}
+  annotations:
+    {{- toYaml .Values.metrics_exporter.annotations | nindent 4 }}
+  {{- end }}
+  labels:
+    component: metrics-exporter
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+    {{- if .Values.metrics_exporter.labels }}
+    {{- toYaml .Values.metrics_exporter.labels | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.metrics_exporter.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      ## multiple metrics exporters can run concurrently
+      maxSurge: 25%
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      component: metrics-exporter
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      annotations:
+      labels:
+        component:  metrics-exporter
+        release: {{ .Release.Name }}
+        {{- if .Values.metrics_exporter.podLabels }}
+        {{- toYaml .Values.metrics_exporter.podLabels | nindent 8 }}
+        {{- end }}
+    spec:
+      restartPolicy: Always
+      {{- if .Values.metrics_exporter.image.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.metrics_exporter.image.pullSecret }}
+      {{- end }}
+      serviceAccountName: {{ .Values.serviceAccountName }}
+      containers:
+        - name:  godon-metrics-exporter
+          {{- include "metrics_eporter.image" . | indent 10 }}
+          resources:
+            {{- toYaml .Values.metrics_exporter.resources | nindent 12 }}
+          env:
+            {{ .Values.metrics_exporter.env }}
+          {{- if .Values.metrics_exporter.livenessProbe.enabled }}
+          livenessProbe:
+            initialDelaySeconds: {{ .Values.metrics_exporter.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.metrics_exporter.livenessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.metrics_exporter.livenessProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.metrics_exporter.livenessProbe.timeoutSeconds }}
+          {{- end }}
+          volumeMounts: {{ .Values.metrics_exporter.volumeMounts }}
+          volumes: {{ .Values.metrics_exporter.volumes }}
