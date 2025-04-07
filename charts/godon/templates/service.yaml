@@ -12,5 +12,6 @@ spec:
     - protocol: TCP
       name: "api-port"
       port: {{ .Values.api.port }}
+      targetPort: 8080
   selector:
     app.kubernetes.io/name: {{ include "godon.fullname" . }}-api
