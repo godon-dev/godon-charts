@@ -13,6 +13,12 @@ nodes:
   extraMounts:
   - hostPath: /srv/storage/
     containerPath: /srv/storage
+  # port mapping for conrol plane ingress to services
+  extraPortMappings:
+  - containerPort: 7080
+    hostPort: 7080
+    listenAddress: "127.0.0.1"
+    protocol: TCP
 # workers
 - role: worker
   image: kindest/node:v1.32.1

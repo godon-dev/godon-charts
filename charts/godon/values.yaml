@@ -4,15 +4,6 @@
 ## CONFIG | Global Variables
 ########################################
 #  global:
-#    AIRFLOW__CORE__ENABLE_XCOM_PICKLING: true
-#    AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: True
-#    AIRFLOW__CORE__EXECUTOR: DaskExecutor
-#    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2//airflowairflow@airflow-db/airflow
-#    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2//airflowairflow@airflow-db/airflow
-#    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: False
-#    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
-#    AIRFLOW__API__AUTH_BACKEND: airflow.api.auth.backend.basic_auth
-#    AIRFLOW__DASK__CLUSTER_ADDRESS: tcp//dask-scheduler-airflow8786
 #    PROMETHEUS_URL: http//prometheus9090
 
 
