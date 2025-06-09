@@ -211,7 +211,7 @@ nats:
   podDisruptionBudget:
     enable: false
   service:
-    enabled: false
+    enabled: true
   natsBox:
     enabled: false
   container:
