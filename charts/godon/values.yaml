@@ -131,18 +131,6 @@ api:
 
   volumeMounts: []
 
-## Component | Postgres Based Distributed Locking Database
-########################################
-locking-db:
-  image:
-    repository: "postgres"
-    tag: 13
-    pullPolicy: IfNotPresent
-  auth:
-    username: locking
-    password: locking
-    database: distributed_locking
-
 ########################################
 ## Component | Postgres Database Storing Godon Components Meta Data
 ########################################
