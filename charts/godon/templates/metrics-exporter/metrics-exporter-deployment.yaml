@@ -40,7 +40,7 @@ spec:
       imagePullSecrets:
         - name: {{ .Values.metrics_exporter.image.pullSecret }}
       {{- end }}
-      serviceAccountName: {{ .Values.serviceAccountName }}
+      serviceAccountName: {{ .Values.metrics_exporter.serviceAccountName | default "" }}
       containers:
         - name:  godon-metrics-exporter
           {{- include "metrics_exporter.image" . | indent 10 }}

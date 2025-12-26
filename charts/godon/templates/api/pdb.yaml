@@ -1,0 +1,16 @@
+{{- if .Values.api.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "godon.fullname" . }}-api
+  labels:
+    component: api
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  minAvailable: {{ .Values.api.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      component: api
+      release: {{ .Release.Name }}
+{{- end }}

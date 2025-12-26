@@ -1,0 +1,16 @@
+{{- if .Values.metrics_exporter.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "godon.fullname" . }}-metrics-exporter
+  labels:
+    component: metrics-exporter
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  minAvailable: {{ .Values.metrics_exporter.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      component: metrics-exporter
+      release: {{ .Release.Name }}
+{{- end }}

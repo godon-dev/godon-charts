@@ -1,0 +1,36 @@
+---
+
+########################################
+## Component | Godon Seeder Job
+########################################
+godon_seeder:
+  image: ghcr.io/godon-dev/godon-seeder:0.0.7
+  env:
+  - name: GODON_VERSION
+    value: "0.0.6"
+
+########################################
+## Component | Windmill Workflow Orchestration Engine
+########################################
+windmill:
+  windmill:
+    lspReplicas: 0
+    workerGroups:
+      - name: "default"
+        extraEnv:
+        - name: WHITELIST_ENVS
+          value: "GODON_LOCKING_DB_SERVICE_PORT,GODON_API_SERVICE_PORT,GODON_METADATA_DB_SERVICE_PORT,YB_TSERVER_SERVICE_SERVICE_PORT,GODON_LOCKING_DB_SERVICE_HOST,GODON_API_SERVICE_HOST,GODON_METADATA_DB_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_PORT_TCP_YSQL_PORT"
+
+########################################
+## Component | Godon API
+########################################
+api:
+  image:
+    repository: "ghcr.io/godon-dev/godon-api"
+    tag: "0.0.11"
+
+########################################
+## Component | Knowledge Archive Database for Cooperating Config Breeders
+########################################
+archive-db:
+  enabled: true
