@@ -1,0 +1,18 @@
+---
+## Service for metrics exporter
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-metrics-exporter"  (include "godon.fullname" .) | trunc 58 | quote }}
+  labels:
+    service-type: "metrics-endpoint"
+spec:
+  type: "ClusterIP"
+  ports:
+    - protocol: TCP
+      name: "metrics-port"
+      port: {{ .Values.metrics_exporter.port }}
+      targetPort: {{ .Values.metrics_exporter.port }}
+  selector:
+    component: metrics-exporter
+    release: {{ .Release.Name }}

@@ -1,20 +1,37 @@
-
+{{- if .Values.godon_seeder.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: godon-seeder
+  name: {{ include "godon.fullname" . }}-seeder
+  labels:
+    component: seeder
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
 spec:
   completions: 1
   parallelism: 1
+  backoffLimit: 2
 
   template:
+    metadata:
+      labels:
+        component: seeder
+        release: {{ .Release.Name }}
     spec:
+      {{- if .Values.godon_seeder.image.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.godon_seeder.image.pullSecret }}
+      {{- end }}
+      restartPolicy: Never
+      serviceAccountName: {{ .Values.godon_seeder.serviceAccountName | default "" }}
       containers:
       - name: godon-seeder
-        image: {{ .Values.godon_seeder.image }}
+        image: {{ .Values.godon_seeder.image.repository }}:{{ .Values.godon_seeder.image.tag | default .Values.godon_seeder.image }}
+        imagePullPolicy: {{ .Values.godon_seeder.image.pullPolicy | default "IfNotPresent" }}
+        resources:
+          {{- toYaml .Values.godon_seeder.resources | nindent 12 }}
         env:
         {{- with .Values.godon_seeder.env }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      restartPolicy: Never
-  backoffLimit: 2
+{{- end }}

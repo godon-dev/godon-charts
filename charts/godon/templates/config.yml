@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ include "godon.fullname" . }}-config-envs
-  labels:
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
-## we must use `data` rather than `stringData` (see: https://github.com/helm/helm/issues/10010)
-data:

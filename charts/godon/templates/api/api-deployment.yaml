@@ -40,7 +40,7 @@ spec:
       imagePullSecrets:
         - name: {{ .Values.api.image.pullSecret }}
       {{- end }}
-      serviceAccountName: {{ .Values.serviceAccountName }}
+      serviceAccountName: {{ .Values.api.serviceAccountName | default "" }}
       containers:
         - name: godon-api
           {{- include "api.image" . | indent 10 }}

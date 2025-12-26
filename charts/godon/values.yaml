@@ -6,6 +6,10 @@
 #  global:
 #    PROMETHEUS_URL: http//prometheus9090
 
+########################################
+## Network | Kubernetes Cluster Domain
+########################################
+clusterDomain: cluster.local
 
 ########################################
 ## Network | Godon DNS Domain
@@ -16,7 +20,20 @@ domainName: "cluster.local"
 ## Component | Godon Seeder Job
 ########################################
 godon_seeder:
-  image: ghcr.io/godon-dev/godon-seeder:0.0.2
+  enabled: true
+  image:
+    repository: ghcr.io/godon-dev/godon-seeder
+    tag: 0.0.2
+    pullPolicy: IfNotPresent
+    pullSecret: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  serviceAccountName: ""
   env:
   - name: GODON_VERSION
     value: "0.0.3"
@@ -46,10 +63,22 @@ metrics_exporter:
 
   port: 9099
 
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
   env: []
 
   livenessProbe:
     enabled: false
+
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
 
   annotations: {}
 
@@ -75,10 +104,22 @@ api:
 
   port: 9090
 
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
   env: []
 
   livenessProbe:
     enabled: false
+
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
 
   annotations: {}
 
