@@ -4,9 +4,7 @@ chart-dirs:
   - charts
 chart-repos:
   - stable=https://charts.helm.sh/stable
-  - dask=https://helm.dask.org/
   - postgres=https://charts.bitnami.com/bitnami
   - yugabyte=https://charts.yugabyte.com
   - windmill=https://windmill-labs.github.io/windmill-helm-charts
-  - nats=https://nats-io.github.io/k8s/helm/charts
 helm-extra-args: --timeout=600s
