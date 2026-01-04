@@ -14,4 +14,13 @@ jobs:
 
       - name: Setup kind cluster config
         run: |
-          kind create cluster --config /github-runner/godon-charts/godon-charts/kind_config.yaml --kubeconfig /run/kind_kubeconfig.yaml --wait 10m
+          echo "🔧 Creating KIND cluster..."
+          kind create cluster \
+            --config ./kind_config.yaml \
+            --name godon-1-cluster \
+            --kubeconfig /tmp/kind_kubeconfig.yaml \
+            --wait 10m
+          
+          echo "✅ KIND cluster created successfully"
+          kind get clusters
+          kubectl cluster-info --kubeconfig=/tmp/kind_kubeconfig.yaml
