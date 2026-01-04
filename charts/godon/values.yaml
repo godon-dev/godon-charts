@@ -201,4 +201,3 @@ archive-db:
       database: archive_db
 
   dnsPolicy: ClusterFirst
-
