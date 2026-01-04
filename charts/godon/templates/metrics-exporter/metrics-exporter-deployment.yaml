@@ -55,5 +55,7 @@ spec:
             failureThreshold: {{ .Values.metrics_exporter.livenessProbe.failureThreshold }}
             timeoutSeconds: {{ .Values.metrics_exporter.livenessProbe.timeoutSeconds }}
           {{- end }}
-          volumeMounts: {{ .Values.metrics_exporter.volumeMounts }}
-          volumes: {{ .Values.metrics_exporter.volumes }}
+          volumeMounts:
+            {{- toYaml .Values.metrics_exporter.volumeMounts | nindent 12 }}
+      volumes:
+        {{- toYaml .Values.metrics_exporter.volumes | nindent 8 }}
