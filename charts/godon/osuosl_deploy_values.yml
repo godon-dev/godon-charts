@@ -4,7 +4,7 @@
 ## Component | Godon Seeder Job
 ########################################
 godon_seeder:
-  image: ghcr.io/godon-dev/godon-seeder:0.0.8
+  image: ghcr.io/godon-dev/godon-seeder:0.0.9
   env:
   - name: CONTROLLER_VERSION
     value: "0.1.0"
@@ -29,7 +29,7 @@ windmill:
 api:
   image:
     repository: "ghcr.io/godon-dev/godon-api"
-    tag: "0.1.0"
+    tag: "0.0.9"
   env:
   - name: WINDMILL_BASE_URL
     value: "http://windmill:80"

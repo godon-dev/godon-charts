@@ -23,7 +23,7 @@ godon_seeder:
   enabled: true
   image:
     repository: ghcr.io/godon-dev/godon-seeder
-    tag: 0.0.2
+    tag: 0.0.9
     pullPolicy: IfNotPresent
     pullSecret: ""
   resources:
@@ -57,7 +57,7 @@ windmill:
 metrics_exporter:
   image:
     repository: "ghcr.io/godon-dev/godon-metrics-exporter"
-    tag: "0.0.1"
+    tag: "0.0.2"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -97,8 +97,8 @@ metrics_exporter:
 ########################################
 api:
   image:
-    repository: "ghcr.io/cherusk/godon-api"
-    tag: "0.0.1"
+    repository: "ghcr.io/godon-dev/godon-api"
+    tag: "0.0.9"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
