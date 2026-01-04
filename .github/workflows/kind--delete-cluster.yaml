@@ -1,0 +1,40 @@
+name: "Delete Kubernetes KIND Cluster"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  delete_cluster:
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Delete KIND Cluster
+        run: |
+          echo "🗑️  Deleting KIND cluster..."
+          
+          if ! kind get clusters | grep -q "godon-1-cluster"; then
+            echo "⚠️  KIND cluster 'godon-1-cluster' does not exist"
+            echo "Available clusters:"
+            kind get clusters
+            exit 0
+          fi
+          
+          echo "🔍 Current clusters:"
+          kind get clusters
+          
+          echo "🗑️  Deleting cluster 'godon-1-cluster'..."
+          kind delete cluster --name godon-1-cluster
+          
+          echo "✅ KIND cluster deleted successfully"
+          echo "🔍 Remaining clusters:"
+          kind get clusters || echo "No clusters remaining"
+
+      - name: Cleanup Artifacts
+        run: |
+          echo "🧹 Cleaning up kubeconfig and artifacts..."
+          rm -f /tmp/kind_kubeconfig.yaml
+          echo "✅ Cleanup complete"

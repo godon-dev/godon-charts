@@ -15,6 +15,14 @@ jobs:
       - name: Setup kind cluster config
         run: |
           echo "🔧 Creating KIND cluster..."
+          
+          if kind get clusters | grep -q "godon-1-cluster"; then
+            echo "❌ KIND cluster 'godon-1-cluster' already exists"
+            echo "Please delete it first:"
+            echo "  kind delete cluster --name godon-1-cluster"
+            exit 1
+          fi
+          
           kind create cluster \
             --config ./kind_config.yaml \
             --name godon-1-cluster \
