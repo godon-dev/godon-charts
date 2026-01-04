@@ -49,6 +49,13 @@ jobs:
           ct lint --target-branch ${{ github.event.repository.default_branch }}
           echo "✅ Chart linting passed"
 
+      - name: Run helm template validation
+        if: steps.list-changed.outputs.changed == 'true'
+        run: |
+          echo "🔍 Running helm template validation..."
+          helm template test ./charts/godon/ --values ./charts/godon/values.yaml --debug
+          echo "✅ Template validation passed"
+
       - name: Display Chart Info
         if: steps.list-changed.outputs.changed == 'true'
         run: |
