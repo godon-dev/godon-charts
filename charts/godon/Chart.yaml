@@ -35,4 +35,3 @@ dependencies:
     repository: https://charts.yugabyte.com
     alias: archive-db
     condition: archive-db.enabled
-

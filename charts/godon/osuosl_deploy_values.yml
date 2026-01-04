@@ -33,7 +33,7 @@ api:
   env:
   - name: WINDMILL_BASE_URL
     value: "http://windmill:80"
-  - name: WINDMILL_API_BASE_URL  
+  - name: WINDMILL_API_BASE_URL
     value: "http://windmill:80"
 
 ########################################

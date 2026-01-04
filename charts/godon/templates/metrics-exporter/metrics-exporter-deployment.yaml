@@ -57,4 +57,3 @@ spec:
           {{- end }}
           volumeMounts: {{ .Values.metrics_exporter.volumeMounts }}
           volumes: {{ .Values.metrics_exporter.volumes }}
-
