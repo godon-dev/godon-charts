@@ -12,26 +12,50 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify KIND Cluster
+        run: |
+          echo "🔍 Verifying KIND cluster..."
+          
+          # Check if KIND cluster exists
+          if ! kind get clusters | grep -q "godon-1-cluster"; then
+            echo "❌ KIND cluster 'godon-1-cluster' not found"
+            echo "Available clusters:"
+            kind get clusters
+            echo ""
+            echo "Please run the 'kind--setup-cluster' workflow first"
+            exit 1
+          fi
+          
+          echo "✅ KIND cluster exists"
+          
+          # Export kubeconfig to known location
+          kind export kubeconfig --name=godon-1-cluster --kubeconfig=/tmp/kind_kubeconfig.yaml
+          
+          # Verify connectivity
+          kubectl cluster-info --kubeconfig=/tmp/kind_kubeconfig.yaml
+
       - name: Upgrade Godon Stack
+        env:
+          KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
           echo "🔄 Upgrading Godon stack (preserving databases and state)"
           helm upgrade godon ./charts/godon/ \
-               --kubeconfig /run/kind_kubeconfig.yaml \
                --dependency-update \
                --create-namespace --namespace godon \
                --values ./charts/godon/osuosl_deploy_values.yml \
                --wait --timeout 15m
 
       - name: Deployment Status Report
+        env:
+          KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
           echo "📊 Godon Stack Status After Upgrade"
           echo "========================================"
           helm status godon \
-               --kubeconfig /run/kind_kubeconfig.yaml \
                --namespace godon \
                --show-resources
 
           echo ""
           echo "🏥 Pod Status"
-          kubectl get pods -n godon --kubeconfig /run/kind_kubeconfig.yaml
+          kubectl get pods -n godon
 
