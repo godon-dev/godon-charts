@@ -59,3 +59,4 @@ spec:
           volumes: {{ .Values.api.volumes }}
           ports:
             - containerPort: 8080
+
