@@ -4,10 +4,12 @@
 ## Component | Godon Seeder Job
 ########################################
 godon_seeder:
-  image: ghcr.io/godon-dev/godon-seeder:0.0.7
+  image: ghcr.io/godon-dev/godon-seeder:0.0.8
   env:
-  - name: GODON_VERSION
-    value: "0.0.6"
+  - name: CONTROLLER_VERSION
+    value: "0.1.0"
+  - name: BREEDER_VERSION
+    value: "0.1.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -27,7 +29,12 @@ windmill:
 api:
   image:
     repository: "ghcr.io/godon-dev/godon-api"
-    tag: "0.0.11"
+    tag: "0.1.0"
+  env:
+  - name: WINDMILL_BASE_URL
+    value: "http://windmill:80"
+  - name: WINDMILL_API_BASE_URL
+    value: "http://windmill:80"
 
 ########################################
 ## Component | Knowledge Archive Database for Cooperating Config Breeders

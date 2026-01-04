@@ -1,0 +1,154 @@
+name: "Godon Stack Status & Debug"
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: 'Specific component to debug (empty = all)'
+        required: false
+        default: ''
+
+jobs:
+  stack_status:
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Overall Stack Status
+        run: |
+          echo "🔍 Godon Stack Status Analysis"
+          echo "==============================="
+          echo ""
+          
+          # Helm release status
+          echo "📊 Helm Release Status"
+          helm status godon \
+               --kubeconfig /run/kind_kubeconfig.yaml \
+               --namespace godon \
+               --show-resources || echo "⚠️  No Helm release found"
+          
+          echo ""
+          echo "🏥 Pod Status"
+          kubectl get pods -n godon --kubeconfig /run/kind_kubeconfig.yaml \
+            -o wide
+          
+          echo ""
+          echo "🌐 Service Status"
+          kubectl get services -n godon --kubeconfig /run/kind_kubeconfig.yaml
+          
+          echo ""
+          echo "📦 Deployments"
+          kubectl get deployments -n godon --kubeconfig /run/kind_kubeconfig.yaml
+          
+          echo ""
+          echo "💾 Persistent Volumes"
+          kubectl get pvc -n godon --kubeconfig /run/kind_kubeconfig.yaml
+          
+          echo ""
+          echo "🎯 Recent Events"
+          kubectl get events -n godon --kubeconfig /run/kind_kubeconfig.yaml \
+            --sort-by='.lastTimestamp' | tail -20
+
+      - name: Component Deep Dive
+        if: inputs.component != ''
+        run: |
+          set -eEux
+          component="${{ inputs.component }}"
+          kubeconfig="/run/kind_kubeconfig.yaml"
+          namespace="godon"
+          
+          echo "🔬 Deep Dive: ${component}"
+          echo "========================="
+          echo ""
+          
+          # Find matching pods
+          pods=$(kubectl get pods -n "${namespace}" --kubeconfig "${kubeconfig}" \
+            -o json | jq -r ".items[] | select(.metadata.name | contains(\"${component}\")) | .metadata.name")
+          
+          for pod in ${pods}; do
+            echo "📦 Pod: ${pod}"
+            echo "-------------------"
+            
+            # Pod details
+            kubectl get pod "${pod}" -n "${namespace}" --kubeconfig "${kubeconfig}" -o json
+            
+            echo ""
+            echo "📋 Recent Logs (last 50 lines)"
+            kubectl logs "${pod}" -n "${namespace}" --kubeconfig "${kubeconfig}" --tail=50 \
+              || echo "No logs available"
+            
+            echo ""
+            echo "🔧 Pod Description"
+            kubectl describe pod "${pod}" -n "${namespace}" --kubeconfig "${kubeconfig}"
+            
+            echo ""
+          done
+
+      - name: Database Health Check
+        run: |
+          echo "💾 Database Status"
+          echo "=================="
+          echo ""
+          
+          # Check YugaByte
+          echo "🐘 YugaByteDB Status"
+          kubectl get pods -n godon --kubeconfig /run/kind_kubeconfig.yaml \
+            -l app=yugabytedb -o wide
+          
+          # Check Windmill DB  
+          echo "🌊 Windmill Database Status"
+          kubectl get pods -n godon --kubeconfig /run/kind_kubeconfig.yaml \
+            -l app=windmill -o wide
+          
+          echo ""
+          echo "💾 PVC Status"
+          kubectl get pvc -n godon --kubeconfig /run/kind_kubeconfig.yaml \
+            -o custom-columns=NAME:.metadata.name,STATUS:.status.phase,CAPACITY:.status.capacity.storage
+
+      - name: Network Connectivity Check
+        run: |
+          echo "🌐 Network Connectivity"
+          echo "======================="
+          echo ""
+          
+          # Check endpoints
+          echo "🔗 Service Endpoints"
+          kubectl get endpoints -n godon --kubeconfig /run/kind_kubeconfig.yaml
+          
+          echo ""
+          echo "🌍 Ingress/Routes"
+          kubectl get ingress -n godon --kubeconfig /run/kind_kubeconfig.yaml \
+            || echo "No ingress resources"
+          
+          echo ""
+          echo "🔌 Network Policies"
+          kubectl get networkpolicy -n godon --kubeconfig /run/kind_kubeconfig.yaml \
+            || echo "No network policies"
+
+      - name: Error Summary
+        if: always()
+        run: |
+          echo "🚨 Error Summary"
+          echo "================"
+          echo ""
+          
+          # Find non-running pods
+          echo "❌ Problem Pods:"
+          kubectl get pods -n godon --kubeconfig /run/kind_kubeconfig.yaml \
+            -o json | jq -r '.items[] | select(.status.phase != "Running") | "\(.metadata.name): \(.status.phase)"' \
+            || echo "All pods are running"
+          
+          echo ""
+          echo "⚠️  Pods with Restarts:"
+          kubectl get pods -n godon --kubeconfig /run/kind_kubeconfig.yaml \
+            -o json | jq -r '.items[] | select(.status.containerStatuses[0].restartCount > 0) | "\(.metadata.name): \(.status.containerStatuses[0].restartCount) restarts"' \
+            || echo "No restarts"
+          
+          echo ""
+          echo "📋 Failed Jobs/CronJobs:"
+          kubectl get jobs -n godon --kubeconfig /run/kind_kubeconfig.yaml \
+            -o json | jq -r '.items[] | select(.status.failed > 0) | "\(.metadata.name): \(.status.failed) failures"' \
+            || echo "No failed jobs"

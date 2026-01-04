@@ -1,0 +1,37 @@
+name: "Upgrade Godon Stack (Fast Iteration)"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy_godon_chart:
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Upgrade Godon Stack
+        run: |
+          echo "🔄 Upgrading Godon stack (preserving databases and state)"
+          helm upgrade godon ./charts/godon/ \
+               --kubeconfig /run/kind_kubeconfig.yaml \
+               --dependency-update \
+               --create-namespace --namespace godon \
+               --values ./charts/godon/osuosl_deploy_values.yml \
+               --wait --timeout 15m
+
+      - name: Deployment Status Report
+        run: |
+          echo "📊 Godon Stack Status After Upgrade"
+          echo "========================================"
+          helm status godon \
+               --kubeconfig /run/kind_kubeconfig.yaml \
+               --namespace godon \
+               --show-resources
+
+          echo ""
+          echo "🏥 Pod Status"
+          kubectl get pods -n godon --kubeconfig /run/kind_kubeconfig.yaml
+

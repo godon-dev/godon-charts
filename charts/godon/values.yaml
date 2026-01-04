@@ -35,8 +35,10 @@ godon_seeder:
       memory: 512Mi
   serviceAccountName: ""
   env:
-  - name: GODON_VERSION
-    value: "0.0.3"
+  - name: CONTROLLER_VERSION
+    value: "0.1.0"
+  - name: BREEDER_VERSION
+    value: "0.1.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -199,4 +201,3 @@ archive-db:
       database: archive_db
 
   dnsPolicy: ClusterFirst
-
