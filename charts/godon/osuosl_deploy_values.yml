@@ -23,6 +23,10 @@ windmill:
         extraEnv:
         - name: WHITELIST_ENVS
           value: "GODON_API_SERVICE_PORT,GODON_METADATA_DB_SERVICE_PORT,YB_TSERVER_SERVICE_SERVICE_PORT,GODON_API_SERVICE_HOST,GODON_METADATA_DB_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_PORT_TCP_YSQL_PORT"
+  postgresql:
+    image:
+      repository: postgres
+      tag: "14"
 
 ########################################
 ## Component | Godon API
