@@ -1,0 +1,57 @@
+name: "Lint Helm Charts"
+
+on:
+  pull_request:
+    paths:
+      - 'charts/**'
+      - '.github/workflows/charts--lint.yaml'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.12.0'
+
+      - name: Set up Python (for ct lint)
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.8.0
+
+      - name: Run chart-testing (list-changed)
+        id: list-changed
+        run: |
+          changed=$(ct list-changed --target-branch ${{ github.event.repository.default_branch }})
+          if [[ -n "$changed" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "🔍 Changed charts detected:"
+            echo "$changed"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "✅ No chart changes detected"
+          fi
+
+      - name: Run chart-testing (lint)
+        if: steps.list-changed.outputs.changed == 'true'
+        run: |
+          echo "🔍 Running comprehensive chart linting..."
+          ct lint --target-branch ${{ github.event.repository.default_branch }}
+          echo "✅ Chart linting passed"
+
+      - name: Display Chart Info
+        if: steps.list-changed.outputs.changed == 'true'
+        run: |
+          echo "📊 Changed Chart Information"
+          echo "============================"
+          helm show chart ./charts/godon/
