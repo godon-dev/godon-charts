@@ -5,7 +5,7 @@
 ########################################
 godon_seeder:
   image:
-    tag: "0.0.13"
+    tag: "0.0.14"
   env:
   - name: CONTROLLER_VERSION
     value: "0.1.0"
@@ -36,7 +36,7 @@ windmill:
 api:
   image:
     repository: "ghcr.io/godon-dev/godon-api"
-    tag: "0.0.9"
+    tag: "0.0.10"
   env:
   - name: WINDMILL_BASE_URL
     value: "http://windmill:80"
