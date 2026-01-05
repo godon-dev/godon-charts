@@ -5,12 +5,14 @@
 ########################################
 godon_seeder:
   image:
-    tag: "0.0.12"
+    tag: "0.0.13"
   env:
   - name: CONTROLLER_VERSION
     value: "0.1.0"
   - name: BREEDER_VERSION
     value: "0.1.0"
+  - name: WINDMILL_BASE_URL
+    value: "http://windmill:80"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
