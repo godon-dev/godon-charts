@@ -12,7 +12,7 @@ godon_seeder:
   - name: BREEDER_VERSION
     value: "0.1.0"
   - name: WINDMILL_BASE_URL
-    value: "http://windmill:80"
+    value: "http://windmill-app.godon.svc.cluster.local:8000"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
