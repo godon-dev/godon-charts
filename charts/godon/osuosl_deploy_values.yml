@@ -48,3 +48,17 @@ api:
 ########################################
 archive-db:
   enabled: true
+
+########################################
+## Component | Godon Metrics Exporter
+########################################
+metrics_exporter:
+  env:
+  - name: ARCHIVE_DB_HOST
+    value: "yb-tservers.archive-db.svc.cluster.local:5433"
+  - name: ARCHIVE_DB_USER
+    value: "yugabyte"
+  - name: ARCHIVE_DB_PW
+    value: "yugabyte"
+  - name: ARCHIVE_DB_DATABASE_NAME
+    value: "archive_db"
