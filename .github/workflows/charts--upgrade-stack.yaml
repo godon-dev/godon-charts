@@ -39,11 +39,21 @@ jobs:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
           echo "🔄 Upgrading Godon stack (preserving databases and state)"
+          # Deploy without waiting for Helm's internal readiness detection (KIND compatibility)
           helm upgrade godon ./charts/godon/ \
                --dependency-update \
                --create-namespace --namespace godon \
                --values ./charts/godon/osuosl_deploy_values.yml \
-               --wait --timeout 15m
+               --wait=false --timeout 5m
+
+      - name: Verify Upgrade Readiness
+        env:
+          KUBECONFIG: /tmp/kind_kubeconfig.yaml
+        run: |
+          echo "⏳ Waiting for upgraded Godon stack to become ready..."
+          # Verify readiness with kubectl (more reliable in KIND than Helm wait)
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=godon -n godon --timeout=10m
+          echo "✅ All Godon pods are ready after upgrade!"
 
       - name: Deployment Status Report
         env:
