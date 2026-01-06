@@ -23,7 +23,7 @@ godon_seeder:
   enabled: true
   image:
     repository: ghcr.io/godon-dev/godon-seeder
-    tag: 0.0.14
+    tag: 0.0.16
     pullPolicy: IfNotPresent
     pullSecret: ""
   resources:
@@ -35,10 +35,12 @@ godon_seeder:
       memory: 512Mi
   serviceAccountName: ""
   env:
+  - name: WINDMILL_BASE_URL
+    value: "http://windmill-app.godon.svc.cluster.local:8000/api"
   - name: CONTROLLER_VERSION
-    value: "0.1.0"
+    value: "0.3.0"
   - name: BREEDER_VERSION
-    value: "0.1.0"
+    value: "0.7.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -73,7 +75,15 @@ metrics_exporter:
       cpu: 500m
       memory: 512Mi
 
-  env: []
+  env:
+  - name: ARCHIVE_DB_HOST
+    value: "yb-tservers.archive-db.svc.cluster.local:5433"
+  - name: ARCHIVE_DB_USER
+    value: "yugabyte"
+  - name: ARCHIVE_DB_PW
+    value: "yugabyte"
+  - name: ARCHIVE_DB_DATABASE_NAME
+    value: "archive_db"
 
   livenessProbe:
     enabled: false

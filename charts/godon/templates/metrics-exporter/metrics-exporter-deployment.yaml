@@ -47,7 +47,7 @@ spec:
           resources:
             {{- toYaml .Values.metrics_exporter.resources | nindent 12 }}
           env:
-            {{ .Values.metrics_exporter.env }}
+            {{- toYaml .Values.metrics_exporter.env | nindent 12 }}
           {{- if .Values.metrics_exporter.livenessProbe.enabled }}
           livenessProbe:
             initialDelaySeconds: {{ .Values.metrics_exporter.livenessProbe.initialDelaySeconds }}
