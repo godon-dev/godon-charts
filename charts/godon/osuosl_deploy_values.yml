@@ -5,14 +5,14 @@
 ########################################
 godon_seeder:
   image:
-    tag: "0.0.15"
+    tag: "0.0.16"
   env:
   - name: CONTROLLER_VERSION
-    value: "0.1.0"
+    value: "0.3.0"
   - name: BREEDER_VERSION
-    value: "0.1.0"
+    value: "0.7.0"
   - name: WINDMILL_BASE_URL
-    value: "http://windmill-app.godon.svc.cluster.local:8000"
+    value: "http://windmill-app.godon.svc.cluster.local:8000/api"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
