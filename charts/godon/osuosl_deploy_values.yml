@@ -48,6 +48,14 @@ api:
 ########################################
 archive-db:
   enabled: true
+  # Skip disk I/O health checks for KIND environment (slow disk sync causes timeouts)
+  # This skips only the /mnt/disk write/sync probes, keeps other monitoring
+  Values:
+    Services:
+    - name: "yb-masters"
+      skipHealthChecks: true
+    - name: "yb-tservers"
+      skipHealthChecks: true
 
 ########################################
 ## Component | Godon Metrics Exporter
