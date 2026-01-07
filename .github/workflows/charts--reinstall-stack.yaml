@@ -57,6 +57,11 @@ jobs:
             sleep 2
           fi
 
+          # Delete persistent volumes for truly clean slate
+          echo "🗑️ Deleting persistent volumes for clean slate..."
+          kubectl -n godon delete pvc --all --force --grace-period=0 || true
+          sleep 2
+
           echo "✅ Cleanup complete"
 
       - name: Deploy Fresh Godon Stack
