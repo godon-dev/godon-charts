@@ -46,6 +46,17 @@ jobs:
           echo "⏳ Waiting for all godon resources to be deleted..."
           kubectl wait --for=delete pod,job,deployment -l app.kubernetes.io/instance=godon -n godon --timeout=60s || true
 
+          # Double-check jobs are gone (some might not have the label)
+          echo "🔍 Verifying no jobs remain..."
+          sleep 3
+          REMAINING_JOBS=$(kubectl -n godon get jobs -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+          if [ -n "$REMAINING_JOBS" ]; then
+            echo "⚠️ Found remaining jobs: $REMAINING_JOBS"
+            echo "🗑️ Force deleting all jobs..."
+            kubectl -n godon delete jobs --all --force --grace-period=0 || true
+            sleep 2
+          fi
+
           echo "✅ Cleanup complete"
 
       - name: Deploy Fresh Godon Stack
