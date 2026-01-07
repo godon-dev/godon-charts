@@ -43,6 +43,11 @@ jobs:
                --wait --ignore-not-found \
                --namespace godon
 
+          echo "⏳ Waiting for all godon resources to be deleted..."
+          kubectl wait --for=delete pod,job,deployment -l app.kubernetes.io/instance=godon -n godon --timeout=60s || true
+
+          echo "✅ Cleanup complete"
+
       - name: Deploy Fresh Godon Stack
         env:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
