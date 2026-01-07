@@ -65,33 +65,43 @@ jobs:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
           echo "🔗 Setting up port forward to godon-api..."
-          
+
           # Get API pod name
           API_POD=$(kubectl get pods -n godon -l component=api -o jsonpath='{.items[0].metadata.name}')
-          
+          echo "📦 API Pod: ${API_POD}"
+
+          # Use a dedicated localhost address to avoid conflicts
+          LOCALHOST_ADDR="127.0.0.2"
+          PORT="9090"
+
           # Setup port forward in background
-          kubectl port-forward -n godon "${API_POD}" 9090:8080 &
+          echo "🔧 Starting port-forward on ${LOCALHOST_ADDR}:${PORT}..."
+          kubectl port-forward -n godon --address ${LOCALHOST_ADDR} "${API_POD}" ${PORT}:8080 &
           PF_PID=$!
-          
+
           echo "✅ Port forward started (PID: ${PF_PID})"
           echo ${PF_PID} > /tmp/pf_pid
-          
+
           # Wait for port forward to be ready
           echo "⏳ Waiting for port forward to be ready..."
           for i in {1..30}; do
-            if curl -f http://localhost:9090/health >/dev/null 2>&1; then
+            if curl -f http://${LOCALHOST_ADDR}:${PORT}/health >/dev/null 2>&1; then
               echo "✅ Port forward is ready!"
               break
             fi
             echo "Attempt $i/30 - waiting for port forward..."
             sleep 2
           done
-          
+
           if [ $i -eq 30 ]; then
-            echo "❌ Port forward failed to become ready"
+            echo "❌ Port forward failed to become ready after 60 seconds"
             kill ${PF_PID} || true
             exit 1
           fi
+
+          # Export for use in subsequent steps
+          echo "API_HOST=${LOCALHOST_ADDR}" >> $GITHUB_ENV
+          echo "API_PORT=${PORT}" >> $GITHUB_ENV
 
       - name: Pull godon-cli Container
         run: |
@@ -161,41 +171,45 @@ jobs:
         id: health_test
         run: |
           echo "🏥 Testing health and root endpoints..."
-          
+
+          API_URL="http://${{ env.API_HOST }}:${{ env.API_PORT }}"
+
           # Test health endpoint
           echo "Testing /health endpoint:"
-          curl -f http://localhost:9090/health | jq . || echo "Health endpoint failed"
-          
-          # Test root endpoint  
+          curl -f ${API_URL}/health | jq . || echo "Health endpoint failed"
+
+          # Test root endpoint
           echo "Testing / endpoint:"
-          curl -f http://localhost:9090/ | jq . || echo "Root endpoint failed"
-          
+          curl -f ${API_URL}/ | jq . || echo "Root endpoint failed"
+
           echo "✅ Health endpoints accessible"
 
       - name: BREEDER Endpoint Tests - Regular Operations
         run: |
           echo "🔬 Testing BREEDER endpoints - Regular Operations"
           echo "===================================================="
-          
+
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
-          
+          API_HOST="${{ env.API_HOST }}"
+          API_PORT="${{ env.API_PORT }}"
+
           # Test 1: List breeders (should be empty or return existing)
           echo "📋 BREEDER LIST - Initial state:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure breeder list || echo "⚠️  Breeder list failed"
-          
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "⚠️  Breeder list failed"
+
           # Test 2: Create a new breeder
           echo "🔨 BREEDER CREATE - Creating test breeder:"
           CREATE_OUTPUT=$(docker run --rm --network host \
             -v /tmp/breeder-test-config.yaml:/breeder-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             breeder create --file=/breeder-config.yaml 2>&1)
-          
+
           echo "${CREATE_OUTPUT}"
-          
+
           # Extract UUID from create output (assuming it returns JSON with uuid field)
           BREEDER_UUID=$(echo "${CREATE_OUTPUT}" | jq -r '.uuid // .id // empty' || echo "")
-          
+
           if [ -z "${BREEDER_UUID}" ]; then
             echo "⚠️  Could not extract breeder UUID, using placeholder for further tests"
             BREEDER_UUID="550e8400-e29b-41d4-a716-446655440000"
@@ -203,60 +217,62 @@ jobs:
             echo "✅ Breeder created with UUID: ${BREEDER_UUID}"
             echo "${BREEDER_UUID}" > /tmp/breeder_uuid
           fi
-          
+
           # Test 3: List breeders after creation
           echo "📋 BREEDER LIST - After creation:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure breeder list || echo "⚠️  Breeder list failed"
-          
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "⚠️  Breeder list failed"
+
           # Test 4: Get specific breeder
           echo "🔍 BREEDER SHOW - Getting specific breeder:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure breeder show --id="${BREEDER_UUID}" || echo "⚠️  Breeder show failed"
-          
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="${BREEDER_UUID}" || echo "⚠️  Breeder show failed"
+
           # Test 5: Update breeder (if implemented)
           echo "🔧 BREEDER UPDATE - Updating breeder:"
           # Update config with actual UUID
           sed "s/PLACEHOLDER_UUID/${BREEDER_UUID}/" /tmp/breeder-update-config.yaml > /tmp/breeder-update-config-final.yaml
-          
+
           docker run --rm --network host \
             -v /tmp/breeder-update-config-final.yaml:/update-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             breeder update --file=/update-config.yaml || echo "⚠️  Breeder update not implemented or failed"
-          
+
           # Test 6: Delete breeder
           echo "🗑️  BREEDER PURGE - Deleting breeder:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure breeder purge --id="${BREEDER_UUID}" || echo "⚠️  Breeder purge failed"
-          
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="${BREEDER_UUID}" || echo "⚠️  Breeder purge failed"
+
           # Test 7: List breeders after deletion
           echo "📋 BREEDER LIST - After deletion:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure breeder list || echo "⚠️  Breeder list failed"
-          
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "⚠️  Breeder list failed"
+
           echo "✅ BREEDER regular operations completed"
 
       - name: BREEDER Endpoint Tests - Adversarial Operations
         run: |
           echo "🚨 Testing BREEDER endpoints - Adversarial Operations"
           echo "========================================================"
-          
+
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
+          API_HOST="${{ env.API_HOST }}"
+          API_PORT="${{ env.API_PORT }}"
           
           # Test 1: Invalid UUID format
           echo "❌ BREEDER SHOW - Invalid UUID format:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure breeder show --id="invalid-uuid-format" || echo "✅ Invalid UUID properly rejected"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="invalid-uuid-format" || echo "✅ Invalid UUID properly rejected"
           
           # Test 2: Non-existent breeder
           echo "❌ BREEDER SHOW - Non-existent breeder:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure breeder show --id="00000000-0000-0000-0000-000000000000" || echo "✅ Non-existent breeder properly handled"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="00000000-0000-0000-0000-000000000000" || echo "✅ Non-existent breeder properly handled"
           
           # Test 3: Delete non-existent breeder
           echo "❌ BREEDER PURGE - Non-existent breeder:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure breeder purge --id="99999999-9999-9999-9999-999999999999" || echo "✅ Non-existent breeder deletion properly handled"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="99999999-9999-9999-9999-999999999999" || echo "✅ Non-existent breeder deletion properly handled"
           
           # Test 4: Malformed breeder config
           echo "❌ BREEDER CREATE - Malformed config:"
@@ -267,7 +283,7 @@ jobs:
           
           docker run --rm --network host \
             -v /tmp/malformed-breeder-config.yaml:/malformed-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             breeder create --file=/malformed-config.yaml || echo "✅ Malformed config properly rejected"
           
           # Test 5: Breeder name with special characters
@@ -281,7 +297,7 @@ jobs:
           
           docker run --rm --network host \
             -v /tmp/special-chars-breeder-config.yaml:/special-chars-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             breeder create --file=/special-chars-config.yaml || echo "✅ Special characters handled or rejected"
           
           # Test 6: Unicode breeder name
@@ -295,13 +311,13 @@ jobs:
           
           docker run --rm --network host \
             -v /tmp/unicode-breeder-config.yaml:/unicode-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             breeder create --file=/unicode-config.yaml || echo "✅ Unicode characters handled or rejected"
           
           # Test 7: Empty breeder list scenario
           echo "📋 BREEDER LIST - Verify empty list handling:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure breeder list || echo "✅ Empty list handled"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "✅ Empty list handled"
           
           echo "✅ BREEDER adversarial operations completed"
 
@@ -309,19 +325,21 @@ jobs:
         run: |
           echo "🔐 Testing CREDENTIAL endpoints - Regular Operations"
           echo "======================================================"
-          
+
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
+          API_HOST="${{ env.API_HOST }}"
+          API_PORT="${{ env.API_PORT }}"
           
           # Test 1: List credentials (should be empty or return existing)
           echo "📋 CREDENTIAL LIST - Initial state:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure credential list || echo "⚠️  Credential list failed"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list || echo "⚠️  Credential list failed"
           
           # Test 2: Create a new credential
           echo "🔨 CREDENTIAL CREATE - Creating test credential:"
           CREATE_OUTPUT=$(docker run --rm --network host \
             -v /tmp/credential-test-config.yaml:/credential-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             credential create --file=/credential-config.yaml 2>&1)
           
           echo "${CREATE_OUTPUT}"
@@ -340,22 +358,22 @@ jobs:
           # Test 3: List credentials after creation
           echo "📋 CREDENTIAL LIST - After creation:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure credential list || echo "⚠️  Credential list failed"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list || echo "⚠️  Credential list failed"
           
           # Test 4: Get specific credential
           echo "🔍 CREDENTIAL SHOW - Getting specific credential:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure credential show --id="${CRED_ID}" || echo "⚠️  Credential show failed"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="${CRED_ID}" || echo "⚠️  Credential show failed"
           
           # Test 5: Delete credential
           echo "🗑️  CREDENTIAL DELETE - Deleting credential:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure credential delete --id="${CRED_ID}" || echo "⚠️  Credential delete failed"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="${CRED_ID}" || echo "⚠️  Credential delete failed"
           
           # Test 6: List credentials after deletion
           echo "📋 CREDENTIAL LIST - After deletion:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure credential list || echo "⚠️  Credential list failed"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list || echo "⚠️  Credential list failed"
           
           echo "✅ CREDENTIAL regular operations completed"
 
@@ -363,23 +381,25 @@ jobs:
         run: |
           echo "🚨 Testing CREDENTIAL endpoints - Adversarial Operations"
           echo "=========================================================="
-          
+
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
+          API_HOST="${{ env.API_HOST }}"
+          API_PORT="${{ env.API_PORT }}"
           
           # Test 1: Invalid UUID format
           echo "❌ CREDENTIAL SHOW - Invalid UUID format:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure credential show --id="invalid-uuid-format" || echo "✅ Invalid UUID properly rejected"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="invalid-uuid-format" || echo "✅ Invalid UUID properly rejected"
           
           # Test 2: Non-existent credential
           echo "❌ CREDENTIAL SHOW - Non-existent credential:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure credential show --id="00000000-0000-0000-0000-000000000000" || echo "✅ Non-existent credential properly handled"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="00000000-0000-0000-0000-000000000000" || echo "✅ Non-existent credential properly handled"
           
           # Test 3: Delete non-existent credential
           echo "❌ CREDENTIAL DELETE - Non-existent credential:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure credential delete --id="99999999-9999-9999-9999-999999999999" || echo "✅ Non-existent credential deletion properly handled"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="99999999-9999-9999-9999-999999999999" || echo "✅ Non-existent credential deletion properly handled"
           
           # Test 4: Malformed credential config
           echo "❌ CREDENTIAL CREATE - Malformed config:"
@@ -391,7 +411,7 @@ jobs:
           
           docker run --rm --network host \
             -v /tmp/malformed-credential-config.yaml:/malformed-cred-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             credential create --file=/malformed-cred-config.yaml || echo "✅ Malformed config properly rejected"
           
           # Test 5: Invalid credential type
@@ -405,7 +425,7 @@ jobs:
           
           docker run --rm --network host \
             -v /tmp/invalid-type-credential-config.yaml:/invalid-type-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             credential create --file=/invalid-type-config.yaml || echo "✅ Invalid credential type properly rejected"
           
           # Test 6: Empty credential content
@@ -419,7 +439,7 @@ jobs:
           
           docker run --rm --network host \
             -v /tmp/empty-content-credential-config.yaml:/empty-content-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             credential create --file=/empty-content-config.yaml || echo "✅ Empty content properly rejected"
           
           # Test 7: Credential name with special characters
@@ -437,13 +457,13 @@ jobs:
           
           docker run --rm --network host \
             -v /tmp/special-chars-credential-config.yaml:/special-chars-cred-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             credential create --file=/special-chars-cred-config.yaml || echo "✅ Special characters handled or rejected"
           
           # Test 8: Empty credential list scenario
           echo "📋 CREDENTIAL LIST - Verify empty list handling:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure credential list || echo "✅ Empty list handled"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list || echo "✅ Empty list handled"
           
           echo "✅ CREDENTIAL adversarial operations completed"
 
@@ -451,8 +471,10 @@ jobs:
         run: |
           echo "🔄 Testing Integration Stress - Multiple Concurrent Operations"
           echo "================================================================"
-          
+
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
+          API_HOST="${{ env.API_HOST }}"
+          API_PORT="${{ env.API_PORT }}"
           
           # Create multiple breeders in succession
           echo "🔨 Creating multiple breeders..."
@@ -466,14 +488,14 @@ jobs:
           
             docker run --rm --network host \
               -v /tmp/breeder-stress-config-${i}.yaml:/breeder-config.yaml:ro \
-              "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+              "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
               breeder create --file=/breeder-config.yaml || echo "⚠️  Breeder ${i} creation failed"
           done
           
           # List all breeders to verify
           echo "📋 Listing all breeders after stress test:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure breeder list || echo "⚠️  Breeder list failed"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "⚠️  Breeder list failed"
           
           # Create multiple credentials in succession  
           echo "🔨 Creating multiple credentials..."
@@ -491,14 +513,14 @@ jobs:
           
             docker run --rm --network host \
               -v /tmp/credential-stress-config-${i}.yaml:/credential-config.yaml:ro \
-              "${CLI_CONTAINER_IMAGE}" --hostname=localhost --port=9090 --insecure \
+              "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
               credential create --file=/credential-config.yaml || echo "⚠️  Credential ${i} creation failed"
           done
           
           # List all credentials to verify
           echo "📋 Listing all credentials after stress test:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure credential list || echo "⚠️  Credential list failed"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list || echo "⚠️  Credential list failed"
           
           echo "✅ Integration stress test completed"
 
@@ -506,34 +528,36 @@ jobs:
         if: always()
         run: |
           echo "🧹 Cleaning up test data..."
-          
+
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
+          API_HOST="${{ env.API_HOST }}"
+          API_PORT="${{ env.API_PORT }}"
           
           # Get list of breeders and clean up test data
           echo "Cleaning up test breeders..."
           BREEDER_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure breeder list 2>/dev/null || echo "[]")
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list 2>/dev/null || echo "[]")
           
           # Extract UUIDs of test breeders (those containing "stress-test" or "smoke-test")
           echo "${BREEDER_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test")) | .uuid' 2>/dev/null | while read UUID; do
             if [ -n "${UUID}" ]; then
               echo "Deleting breeder: ${UUID}"
               docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-                --hostname=localhost --port=9090 --insecure breeder purge --id="${UUID}" || echo "Failed to delete ${UUID}"
+                --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="${UUID}" || echo "Failed to delete ${UUID}"
             fi
           done
           
           # Get list of credentials and clean up test data
           echo "Cleaning up test credentials..."
           CRED_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=localhost --port=9090 --insecure credential list 2>/dev/null || echo "[]")
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list 2>/dev/null || echo "[]")
           
           # Extract IDs of test credentials
           echo "${CRED_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test")) | .id' 2>/dev/null | while read ID; do
             if [ -n "${ID}" ]; then
               echo "Deleting credential: ${ID}"
               docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-                --hostname=localhost --port=9090 --insecure credential delete --id="${ID}" || echo "Failed to delete ${ID}"
+                --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="${ID}" || echo "Failed to delete ${ID}"
             fi
           done
           
