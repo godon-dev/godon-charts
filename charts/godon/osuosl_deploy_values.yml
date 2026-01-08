@@ -19,6 +19,7 @@ godon_seeder:
 ########################################
 windmill:
   windmill:
+    tag: "1.601.1"
     lspReplicas: 0
     workerGroups:
       - name: "default"
