@@ -225,9 +225,9 @@ jobs:
           CREATE_OUTPUT=$(docker run --rm --network host \
             -v /tmp/breeder-test-config.yaml:/breeder-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="smoke-test-breeder" --file=/breeder-config.yaml 2>&1)
+            breeder create --name="smoke-test-breeder" --file=/breeder-config.yaml 2>&1 || true)
 
-          echo "${CREATE_OUTPUT}"
+          echo "Create output: ${CREATE_OUTPUT}"
 
           # Extract UUID from create output (assuming it returns JSON with uuid field)
           BREEDER_UUID=$(echo "${CREATE_OUTPUT}" | jq -r '.uuid // .id // empty' || echo "")
