@@ -5,10 +5,10 @@
 ########################################
 godon_seeder:
   image:
-    tag: "0.0.16"
+    tag: "0.0.17"
   env:
   - name: CONTROLLER_VERSION
-    value: "0.3.0"
+    value: "0.4.0"
   - name: BREEDER_VERSION
     value: "0.7.0"
   - name: WINDMILL_BASE_URL
@@ -19,6 +19,7 @@ godon_seeder:
 ########################################
 windmill:
   windmill:
+    tag: "1.601.1"
     lspReplicas: 0
     workerGroups:
       - name: "default"
