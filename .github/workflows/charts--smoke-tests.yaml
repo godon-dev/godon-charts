@@ -122,14 +122,17 @@ jobs:
           
           # Create test breeder config
           cat > /tmp/breeder-test-config.yaml << 'EOF'
-          name: "smoke-test-breeder"
-          description: "Breeder created during smoke testing"
-          config: >
-            {
-              "test_parameter": "test_value",
-              "optimization_target": "maximize_throughput",
-              "iterations": 100
-            }
+          meta:
+            configVersion: "0.2"
+            description: "Smoke test breeder configuration"
+
+          breeder:
+            type: "linux_performance"
+
+          settings:
+            sysctl:
+              vm.swappiness:
+                value: 10
           EOF
           
           # Create test breeder update config
@@ -202,7 +205,7 @@ jobs:
           CREATE_OUTPUT=$(docker run --rm --network host \
             -v /tmp/breeder-test-config.yaml:/breeder-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --file=/breeder-config.yaml 2>&1)
+            breeder create --name="smoke-test-breeder" --file=/breeder-config.yaml 2>&1)
 
           echo "${CREATE_OUTPUT}"
 
@@ -276,42 +279,42 @@ jobs:
           # Test 4: Malformed breeder config
           echo "❌ BREEDER CREATE - Malformed config:"
           cat > /tmp/malformed-breeder-config.yaml << 'EOF'
-          name: ""
-          config: "invalid json content {"
+          malformed: yaml content
+          invalid:
           EOF
-          
+
           docker run --rm --network host \
             -v /tmp/malformed-breeder-config.yaml:/malformed-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --file=/malformed-config.yaml || echo "✅ Malformed config properly rejected"
+            breeder create --name="malformed" --file=/malformed-config.yaml || echo "✅ Malformed config properly rejected"
           
           # Test 5: Breeder name with special characters
           echo "🔍 BREEDER CREATE - Special characters in name:"
           cat > /tmp/special-chars-breeder-config.yaml << 'EOF'
-          name: "test-breeder-with-special-chars-<>-\"-\\-"
-          description: "Testing special character handling"
-          config: >
-            {"test": "value"}
+          meta:
+            configVersion: "0.2"
+          settings:
+            test: value
           EOF
-          
+
           docker run --rm --network host \
             -v /tmp/special-chars-breeder-config.yaml:/special-chars-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --file=/special-chars-config.yaml || echo "✅ Special characters handled or rejected"
+            breeder create --name="test-breeder-with-special-chars" --file=/special-chars-config.yaml || echo "✅ Special characters handled or rejected"
           
           # Test 6: Unicode breeder name
           echo "🔍 BREEDER CREATE - Unicode characters in name:"
           cat > /tmp/unicode-breeder-config.yaml << 'EOF'
-          name: "test-breeder-unicode-𝕌𝕟𝕚𝕔𝕠𝕕𝕖-🚀-测试"
-          description: "Testing unicode character handling"
-          config: >
-            {"test": "value"}
+          meta:
+            configVersion: "0.2"
+          settings:
+            test: value
           EOF
-          
+
           docker run --rm --network host \
             -v /tmp/unicode-breeder-config.yaml:/unicode-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --file=/unicode-config.yaml || echo "✅ Unicode characters handled or rejected"
+            breeder create --name="test-breeder-unicode-🚀-测试" --file=/unicode-config.yaml || echo "✅ Unicode characters handled or rejected"
           
           # Test 7: Empty breeder list scenario
           echo "📋 BREEDER LIST - Verify empty list handling:"
@@ -479,16 +482,17 @@ jobs:
           echo "🔨 Creating multiple breeders..."
           for i in {1..5}; do
             cat > /tmp/breeder-stress-config-${i}.yaml << EOF
-          name: "stress-test-breeder-${i}"
-          description: "Stress test breeder ${i}"
-          config: >
-            {"test": "value_${i}", "iteration": ${i}}
+          meta:
+            configVersion: "0.2"
+          settings:
+            test: "value_${i}"
+            iteration: ${i}
           EOF
-          
+
             docker run --rm --network host \
               -v /tmp/breeder-stress-config-${i}.yaml:/breeder-config.yaml:ro \
               "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              breeder create --file=/breeder-config.yaml || echo "⚠️  Breeder ${i} creation failed"
+              breeder create --name="stress-test-breeder-${i}" --file=/breeder-config.yaml || echo "⚠️  Breeder ${i} creation failed"
           done
           
           # List all breeders to verify
