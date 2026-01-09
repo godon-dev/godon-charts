@@ -41,7 +41,7 @@ api:
     tag: "0.0.10"
   env:
   - name: WINDMILL_BASE_URL
-    value: "http://windmill-app.godon.svc.cluster.local:8000"
+    value: "http://windmill-app.godon.svc.cluster.local:8000/api"
 
 ########################################
 ## Component | Knowledge Archive Database for Cooperating Config Breeders

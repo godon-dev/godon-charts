@@ -126,7 +126,7 @@ api:
 
   env:
   - name: WINDMILL_BASE_URL
-    value: "http://windmill-app.godon.svc.cluster.local:8000"
+    value: "http://windmill-app.godon.svc.cluster.local:8000/api"
 
   livenessProbe:
     enabled: false
