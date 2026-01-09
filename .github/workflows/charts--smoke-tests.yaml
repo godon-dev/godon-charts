@@ -154,6 +154,9 @@ jobs:
                 username: "test_user"
                 credentialName: "test_credential"
           EOF
+
+          echo "📝 DEBUG: Verifying created config file:"
+          cat /tmp/breeder-test-config.yaml
           
           # Create test breeder update config
           cat > /tmp/breeder-update-config.yaml << 'EOF'
