@@ -124,7 +124,6 @@ jobs:
           cat > /tmp/breeder-test-config.yaml << 'EOF'
           meta:
             configVersion: "0.2"
-            description: "Smoke test breeder configuration"
 
           breeder:
             type: "linux_performance"
@@ -132,7 +131,28 @@ jobs:
           settings:
             sysctl:
               vm.swappiness:
-                value: 10
+                step: 1
+                constraints:
+                  lower: 1
+                  upper: 100
+
+          objectives:
+            - name: "test_metric"
+              direction: minimize
+              reconnaissance:
+                service: prometheus
+                query: "scalar(test_metric)"
+                stabilization_seconds: 1
+                samples: 1
+                interval: 1
+
+          effectuation:
+            targets:
+              - type: "ssh"
+                id: "test_target"
+                address: "10.0.5.53"
+                username: "test_user"
+                credentialName: "test_credential"
           EOF
           
           # Create test breeder update config
