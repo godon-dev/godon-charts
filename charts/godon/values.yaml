@@ -124,7 +124,9 @@ api:
       cpu: 500m
       memory: 512Mi
 
-  env: []
+  env:
+  - name: WINDMILL_BASE_URL
+    value: "http://windmill-app.godon.svc.cluster.local:8000"
 
   livenessProbe:
     enabled: false
