@@ -5,7 +5,6 @@ on:
   pull_request:
     branches: [ main ]
     paths:
-      - 'charts/**'
       - '.github/workflows/charts--smoke-tests.yaml'
 
 jobs:
