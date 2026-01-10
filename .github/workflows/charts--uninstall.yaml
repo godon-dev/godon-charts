@@ -86,13 +86,24 @@ jobs:
 
         echo "✅ All pods and jobs terminated"
 
-    - name: Delete PersistentVolumes for clean slate
+    - name: Delete ALL PersistentVolumes for clean slate
       env:
         KUBECONFIG: /tmp/kind_kubeconfig.yaml
       run: |
-        echo "🗑️ Deleting persistent volumes..."
+        echo "🗑️ Deleting ALL persistent volumes including Windmill database..."
+        echo "This is necessary to fix Windmill database schema violations"
         kubectl -n godon delete pvc --all --force --grace-period=0 || true
-        echo "✅ PVCs deleted"
+        sleep 5
+
+        # Double-check all PVCs are gone
+        REMAINING_PVCS=$(kubectl -n godon get pvc --no-headers 2>/dev/null | wc -l)
+        if [ "$REMAINING_PVCS" -gt 0 ]; then
+          echo "⚠️ Found $REMAINING_PVCS remaining PVCs, force deleting again..."
+          kubectl -n godon delete pvc --all --force --grace-period=0 --timeout=10s || true
+          sleep 3
+        fi
+
+        echo "✅ All PVCs deleted including Windmill database"
 
     - name: Show remaining resources
       env:
