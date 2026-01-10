@@ -226,42 +226,10 @@ jobs:
           # Test 2: Create a new breeder
           echo "🔨 BREEDER CREATE - Creating test breeder:"
 
-          # Create test breeder config - matching CI test format
-          cat > /tmp/breeder-test-config.yaml << 'EOF'
-          breeder:
-            type: linux_performance
+          # Use same config as API CI - fetch from upstream godon repository
+          curl -s https://raw.githubusercontent.com/godon-dev/godon/main/examples/network.yml -o /tmp/breeder-test-config.yaml
 
-          run:
-            parallel: 1
-            completion_criteria:
-              iterations:
-                min: 10
-                max: 100
-
-          effectuation:
-            targets:
-              - type: ssh
-                address: test.local
-                connection:
-                  username: test_user
-                  private_key: /path/to/key
-
-          cooperation:
-            active: false
-
-          objectives:
-            - name: test_metric
-              direction: minimize
-
-          settings:
-            sysctl:
-              vm_swappiness:
-                constraints:
-                  upper: 100
-                  lower: 0
-          EOF
-
-          echo "📝 DEBUG: Verifying created config file:"
+          echo "📝 DEBUG: Verifying fetched config file:"
           cat /tmp/breeder-test-config.yaml
 
           CREATE_OUTPUT=$(docker run --rm --network host \
