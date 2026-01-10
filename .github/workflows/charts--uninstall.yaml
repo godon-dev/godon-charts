@@ -1,0 +1,202 @@
+name: Uninstall Godon Chart
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep_namespace:
+        description: 'Keep the namespace after uninstalling'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  NIXPKGS_CHANNEL: https://nixos.org/channels/nixos-25.05
+
+jobs:
+  uninstall-chart:
+    name: Uninstall Godon from KIND
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Setup Nix
+      uses: cachix/install-nix-action@v22
+      with:
+        nix_path: nixpkgs=https://nixos.org/channels/nixos-25.05
+
+    - name: Install kubectl
+      run: |
+        nix-env -iA nixpkgs.kubectl
+
+    - name: Install kind
+      run: |
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
+
+    - name: Install Helm
+      run: |
+        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        chmod 700 get_helm.sh
+        ./get_helm.sh
+
+    - name: Check KIND cluster status
+      run: |
+        echo "🔍 Checking KIND cluster status..."
+        if kind get clusters | grep -q "kind"; then
+          echo "✅ KIND cluster exists"
+          kubectl config current-context
+          kubectl get nodes
+        else
+          echo "❌ No KIND cluster found"
+          exit 1
+        fi
+
+    - name: List installed Helm releases
+      run: |
+        echo "📋 Listing all Helm releases..."
+        helm list --all-namespaces || echo "No releases found"
+
+    - name: Show current Godon resources
+      run: |
+        echo "📊 Showing current Godon resources..."
+        echo "Namespaces:"
+        kubectl get namespaces | grep godon || echo "No godon namespace found"
+        echo ""
+        echo "Pods in godon namespace:"
+        kubectl get pods -n godon 2>/dev/null || echo "No pods found"
+        echo ""
+        echo "PVs/PVCs:"
+        kubectl get pv,pvc -n godon 2>/dev/null || echo "No PVs/PVCs found"
+
+    - name: Uninstall Godon chart
+      run: |
+        echo "🗑️  Uninstalling Godon chart..."
+        cd charts/godon
+
+        # Check if godon release exists
+        if helm list -n godon | grep -q "godon"; then
+          echo "Uninstalling godon release..."
+          helm uninstall godon -n godon
+          echo "✅ Godon chart uninstalled"
+        else
+          echo "⚠️  No godon release found in namespace godon"
+        fi
+
+    - name: Wait for pod termination
+      run: |
+        echo "⏳ Waiting for pods to terminate..."
+        timeout=60
+        elapsed=0
+        while [ $elapsed -lt $timeout ]; do
+          POD_COUNT=$(kubectl get pods -n godon 2>/dev/null | grep -v NAME | wc -l)
+          if [ "$POD_COUNT" -eq 0 ]; then
+            echo "✅ All pods terminated"
+            break
+          fi
+          echo "Waiting for $POD_COUNT pod(s) to terminate... ($elapsed/${timeout}s)"
+          sleep 5
+          elapsed=$((elapsed + 5))
+        done
+
+        if [ $elapsed -ge $timeout ]; then
+          echo "⚠️  Timeout waiting for pods to terminate"
+          kubectl get pods -n godon
+        fi
+
+    - name: Show remaining resources
+      run: |
+        echo "📊 Showing remaining resources after uninstall..."
+        echo ""
+        echo "Pods:"
+        kubectl get pods -n godon 2>/dev/null || echo "No pods"
+        echo ""
+        echo "Services:"
+        kubectl get services -n godon 2>/dev/null || echo "No services"
+        echo ""
+        echo "ConfigMaps:"
+        kubectl get configmaps -n godon 2>/dev/null || echo "No configmaps"
+        echo ""
+        echo "Secrets:"
+        kubectl get secrets -n godon 2>/dev/null || echo "No secrets"
+        echo ""
+        echo "PersistentVolumes:"
+        kubectl get pv | grep godon || echo "No PVs"
+        echo ""
+        echo "PersistentVolumeClaims:"
+        kubectl get pvc -n godon 2>/dev/null || echo "No PVCs"
+
+    - name: Clean up namespace (if requested)
+      if: github.event.inputs.keep_namespace != 'true'
+      run: |
+        echo "🧹 Deleting godon namespace..."
+        kubectl delete namespace godon --timeout=60s || echo "⚠️  Namespace deletion timed out or failed"
+        echo ""
+        echo "Waiting for namespace deletion..."
+        timeout=90
+        elapsed=0
+        while [ $elapsed -lt $timeout ]; do
+          if ! kubectl get namespace godon >/dev/null 2>&1; then
+            echo "✅ Namespace deleted successfully"
+            break
+          fi
+          echo "Waiting for namespace deletion... ($elapsed/${timeout}s)"
+          sleep 5
+          elapsed=$((elapsed + 5))
+        done
+
+        if [ $elapsed -ge $timeout ]; then
+          echo "⚠️  Namespace deletion timed out (this is normal for PVs with finalizers)"
+        fi
+
+    - name: Clean up orphaned PVs
+      if: github.event.inputs.keep_namespace != 'true'
+      run: |
+        echo "🧹 Checking for orphaned PersistentVolumes..."
+        PV_LIST=$(kubectl get pv -o json | jq -r '.items[] | select(.spec.claimRef.namespace == "godon") | .metadata.name')
+        if [ -n "$PV_LIST" ]; then
+          echo "Found orphaned PVs:"
+          echo "$PV_LIST"
+          echo ""
+          echo "Deleting orphaned PVs..."
+          for pv in $PV_LIST; do
+            echo "Deleting PV: $pv"
+            kubectl delete pv "$pv" --timeout=30s || echo "⚠️  Failed to delete PV $pv"
+          done
+        else
+          echo "✅ No orphaned PVs found"
+        fi
+
+    - name: Verify cleanup
+      run: |
+        echo "🔍 Verifying cleanup..."
+        echo ""
+        echo "Namespaces:"
+        kubectl get namespaces | grep godon && echo "⚠️  godon namespace still exists" || echo "✅ godon namespace removed"
+        echo ""
+        echo "Godon PVs:"
+        kubectl get pv | grep godon && echo "⚠️  godon PVs still exist" || echo "✅ No godon PVs"
+        echo ""
+        echo "Godon releases:"
+        helm list -n godon 2>/dev/null | grep godon && echo "⚠️  godon release still exists" || echo "✅ No godon releases"
+
+    - name: Final cluster status
+      if: always()
+      run: |
+        echo "📊 Final cluster status..."
+        echo ""
+        echo "All namespaces:"
+        kubectl get namespaces
+        echo ""
+        echo "All Helm releases:"
+        helm list --all-namespaces || echo "No releases"
+        echo ""
+        echo "Cluster nodes:"
+        kubectl get nodes

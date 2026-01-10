@@ -23,7 +23,7 @@ godon_seeder:
   enabled: true
   image:
     repository: ghcr.io/godon-dev/godon-seeder
-    tag: 0.0.16
+    tag: 0.0.18
     pullPolicy: IfNotPresent
     pullSecret: ""
   resources:
@@ -38,7 +38,7 @@ godon_seeder:
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
   - name: CONTROLLER_VERSION
-    value: "0.3.0"
+    value: "0.9.0"
   - name: BREEDER_VERSION
     value: "0.7.0"
 
@@ -108,7 +108,7 @@ metrics_exporter:
 api:
   image:
     repository: "ghcr.io/godon-dev/godon-api"
-    tag: "0.0.10"
+    tag: "0.0.13"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -124,7 +124,9 @@ api:
       cpu: 500m
       memory: 512Mi
 
-  env: []
+  env:
+  - name: WINDMILL_BASE_URL
+    value: "http://windmill-app.godon.svc.cluster.local:8000/api"
 
   livenessProbe:
     enabled: false

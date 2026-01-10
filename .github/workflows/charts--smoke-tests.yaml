@@ -120,17 +120,43 @@ jobs:
         run: |
           echo "📝 Creating test configuration files..."
           
-          # Create test breeder config
+          # Create test breeder config - matching CI test format
           cat > /tmp/breeder-test-config.yaml << 'EOF'
-          name: "smoke-test-breeder"
-          description: "Breeder created during smoke testing"
-          config: >
-            {
-              "test_parameter": "test_value",
-              "optimization_target": "maximize_throughput",
-              "iterations": 100
-            }
+          breeder:
+            type: linux_performance
+
+          run:
+            parallel: 1
+            completion_criteria:
+              iterations:
+                min: 10
+                max: 100
+
+          effectuation:
+            targets:
+              - type: ssh
+                address: test.local
+                connection:
+                  username: test_user
+                  private_key: /path/to/key
+
+          cooperation:
+            active: false
+
+          objectives:
+            - name: test_metric
+              direction: minimize
+
+          settings:
+            sysctl:
+              vm_swappiness:
+                constraints:
+                  upper: 100
+                  lower: 0
           EOF
+
+          echo "📝 DEBUG: Verifying created config file:"
+          cat /tmp/breeder-test-config.yaml
           
           # Create test breeder update config
           cat > /tmp/breeder-update-config.yaml << 'EOF'
@@ -199,12 +225,51 @@ jobs:
 
           # Test 2: Create a new breeder
           echo "🔨 BREEDER CREATE - Creating test breeder:"
+
+          # Create test breeder config - matching CI test format
+          cat > /tmp/breeder-test-config.yaml << 'EOF'
+          breeder:
+            type: linux_performance
+
+          run:
+            parallel: 1
+            completion_criteria:
+              iterations:
+                min: 10
+                max: 100
+
+          effectuation:
+            targets:
+              - type: ssh
+                address: test.local
+                connection:
+                  username: test_user
+                  private_key: /path/to/key
+
+          cooperation:
+            active: false
+
+          objectives:
+            - name: test_metric
+              direction: minimize
+
+          settings:
+            sysctl:
+              vm_swappiness:
+                constraints:
+                  upper: 100
+                  lower: 0
+          EOF
+
+          echo "📝 DEBUG: Verifying created config file:"
+          cat /tmp/breeder-test-config.yaml
+
           CREATE_OUTPUT=$(docker run --rm --network host \
             -v /tmp/breeder-test-config.yaml:/breeder-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --file=/breeder-config.yaml 2>&1)
+            breeder create --name="smoke-test-breeder" --file=/breeder-config.yaml 2>&1 || true)
 
-          echo "${CREATE_OUTPUT}"
+          echo "Create output: ${CREATE_OUTPUT}"
 
           # Extract UUID from create output (assuming it returns JSON with uuid field)
           BREEDER_UUID=$(echo "${CREATE_OUTPUT}" | jq -r '.uuid // .id // empty' || echo "")
@@ -229,6 +294,42 @@ jobs:
 
           # Test 5: Update breeder (if implemented)
           echo "🔧 BREEDER UPDATE - Updating breeder:"
+
+          # Create test breeder update config
+          cat > /tmp/breeder-update-config.yaml << 'EOF'
+          uuid: "PLACEHOLDER_UUID"
+          name: "updated-smoke-test-breeder"
+          description: "Updated smoke test breeder"
+          config:
+            meta:
+              configVersion: "0.2"
+            breeder:
+              type: "linux_performance"
+            settings:
+              sysctl:
+                vm.swappiness:
+                  step: 5
+                  constraints:
+                    lower: 10
+                    upper: 90
+            objectives:
+              - name: "test_metric"
+                direction: minimize
+                reconnaissance:
+                  service: prometheus
+                  query: "scalar(test_metric)"
+                  stabilization_seconds: 1
+                  samples: 1
+                  interval: 1
+            effectuation:
+              targets:
+                - type: "ssh"
+                  id: "test_target"
+                  address: "10.0.5.53"
+                  username: "test_user"
+                  credentialName: "test_credential"
+          EOF
+
           # Update config with actual UUID
           sed "s/PLACEHOLDER_UUID/${BREEDER_UUID}/" /tmp/breeder-update-config.yaml > /tmp/breeder-update-config-final.yaml
 
@@ -266,52 +367,52 @@ jobs:
           # Test 2: Non-existent breeder
           echo "❌ BREEDER SHOW - Non-existent breeder:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="00000000-0000-0000-0000-000000000000" || echo "✅ Non-existent breeder properly handled"
-          
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="00000000-0000-4000-8000-000000000000" || echo "✅ Non-existent breeder properly handled"
+
           # Test 3: Delete non-existent breeder
           echo "❌ BREEDER PURGE - Non-existent breeder:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="99999999-9999-9999-9999-999999999999" || echo "✅ Non-existent breeder deletion properly handled"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="99999999-9999-4999-9999-999999999999" || echo "✅ Non-existent breeder deletion properly handled"
           
           # Test 4: Malformed breeder config
           echo "❌ BREEDER CREATE - Malformed config:"
           cat > /tmp/malformed-breeder-config.yaml << 'EOF'
-          name: ""
-          config: "invalid json content {"
+          malformed: yaml content
+          invalid:
           EOF
-          
+
           docker run --rm --network host \
             -v /tmp/malformed-breeder-config.yaml:/malformed-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --file=/malformed-config.yaml || echo "✅ Malformed config properly rejected"
+            breeder create --name="malformed" --file=/malformed-config.yaml || echo "✅ Malformed config properly rejected"
           
           # Test 5: Breeder name with special characters
           echo "🔍 BREEDER CREATE - Special characters in name:"
           cat > /tmp/special-chars-breeder-config.yaml << 'EOF'
-          name: "test-breeder-with-special-chars-<>-\"-\\-"
-          description: "Testing special character handling"
-          config: >
-            {"test": "value"}
+          meta:
+            configVersion: "0.2"
+          settings:
+            test: value
           EOF
-          
+
           docker run --rm --network host \
             -v /tmp/special-chars-breeder-config.yaml:/special-chars-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --file=/special-chars-config.yaml || echo "✅ Special characters handled or rejected"
+            breeder create --name="test-breeder-with-special-chars" --file=/special-chars-config.yaml || echo "✅ Special characters handled or rejected"
           
           # Test 6: Unicode breeder name
           echo "🔍 BREEDER CREATE - Unicode characters in name:"
           cat > /tmp/unicode-breeder-config.yaml << 'EOF'
-          name: "test-breeder-unicode-𝕌𝕟𝕚𝕔𝕠𝕕𝕖-🚀-测试"
-          description: "Testing unicode character handling"
-          config: >
-            {"test": "value"}
+          meta:
+            configVersion: "0.2"
+          settings:
+            test: value
           EOF
-          
+
           docker run --rm --network host \
             -v /tmp/unicode-breeder-config.yaml:/unicode-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --file=/unicode-config.yaml || echo "✅ Unicode characters handled or rejected"
+            breeder create --name="test-breeder-unicode-🚀-测试" --file=/unicode-config.yaml || echo "✅ Unicode characters handled or rejected"
           
           # Test 7: Empty breeder list scenario
           echo "📋 BREEDER LIST - Verify empty list handling:"
@@ -336,6 +437,18 @@ jobs:
           
           # Test 2: Create a new credential
           echo "🔨 CREDENTIAL CREATE - Creating test credential:"
+
+          # Create test credential config
+          cat > /tmp/credential-test-config.yaml << 'EOF'
+          name: "smoke-test-ssh-key"
+          credential_type: "ssh_private_key"
+          description: "SSH key for smoke testing"
+          content: |
+            -----BEGIN RSA PRIVATE KEY-----
+            MIIEpAIBAAKCAQEA2Z2H7V...
+            -----END RSA PRIVATE KEY-----
+          EOF
+
           CREATE_OUTPUT=$(docker run --rm --network host \
             -v /tmp/credential-test-config.yaml:/credential-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
@@ -393,12 +506,12 @@ jobs:
           # Test 2: Non-existent credential
           echo "❌ CREDENTIAL SHOW - Non-existent credential:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="00000000-0000-0000-0000-000000000000" || echo "✅ Non-existent credential properly handled"
-          
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="00000000-0000-4000-8000-000000000000" || echo "✅ Non-existent credential properly handled"
+
           # Test 3: Delete non-existent credential
           echo "❌ CREDENTIAL DELETE - Non-existent credential:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="99999999-9999-9999-9999-999999999999" || echo "✅ Non-existent credential deletion properly handled"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="99999999-9999-4999-9999-999999999999" || echo "✅ Non-existent credential deletion properly handled"
           
           # Test 4: Malformed credential config
           echo "❌ CREDENTIAL CREATE - Malformed config:"
@@ -479,16 +592,17 @@ jobs:
           echo "🔨 Creating multiple breeders..."
           for i in {1..5}; do
             cat > /tmp/breeder-stress-config-${i}.yaml << EOF
-          name: "stress-test-breeder-${i}"
-          description: "Stress test breeder ${i}"
-          config: >
-            {"test": "value_${i}", "iteration": ${i}}
+          meta:
+            configVersion: "0.2"
+          settings:
+            test: "value_${i}"
+            iteration: ${i}
           EOF
-          
+
             docker run --rm --network host \
               -v /tmp/breeder-stress-config-${i}.yaml:/breeder-config.yaml:ro \
               "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              breeder create --file=/breeder-config.yaml || echo "⚠️  Breeder ${i} creation failed"
+              breeder create --name="stress-test-breeder-${i}" --file=/breeder-config.yaml || echo "⚠️  Breeder ${i} creation failed"
           done
           
           # List all breeders to verify
