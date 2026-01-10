@@ -226,16 +226,18 @@ jobs:
           # Test 2: Create a new breeder
           echo "🔨 BREEDER CREATE - Creating test breeder:"
 
-          # Use same config as API CI - fetch from upstream godon repository
-          curl -s https://raw.githubusercontent.com/godon-dev/godon/main/examples/network.yml -o /tmp/breeder-test-config.yaml
+          # Fetch config from upstream godon repository to unique filename
+          curl -s https://raw.githubusercontent.com/godon-dev/godon/refs/heads/master/examples/network.yml -o network-upstream.yml
 
           echo "📝 DEBUG: Verifying fetched config file:"
-          cat /tmp/breeder-test-config.yaml
+          cat network-upstream.yml
+          echo "File exists in workflow: $(ls -la network-upstream.yml)"
 
           CREATE_OUTPUT=$(docker run --rm --network host \
-            -v /tmp/breeder-test-config.yaml:/breeder-config.yaml:ro \
+            -v $(pwd):/work:ro \
+            -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="smoke-test-breeder" --file=/breeder-config.yaml 2>&1 || true)
+            breeder create --name="smoke-test-breeder" --file=network-upstream.yml 2>&1 || true)
 
           echo "Create output: ${CREATE_OUTPUT}"
 
