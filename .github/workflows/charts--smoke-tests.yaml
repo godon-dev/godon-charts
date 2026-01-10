@@ -225,6 +225,45 @@ jobs:
 
           # Test 2: Create a new breeder
           echo "🔨 BREEDER CREATE - Creating test breeder:"
+
+          # Create test breeder config
+          cat > /tmp/breeder-test-config.yaml << 'EOF'
+          meta:
+            configVersion: "0.2"
+
+          breeder:
+            type: "linux_performance"
+
+          settings:
+            sysctl:
+              vm.swappiness:
+                step: 1
+                constraints:
+                  lower: 1
+                  upper: 100
+
+          objectives:
+            - name: "test_metric"
+              direction: minimize
+              reconnaissance:
+                service: prometheus
+                query: "scalar(test_metric)"
+                stabilization_seconds: 1
+                samples: 1
+                interval: 1
+
+          effectuation:
+            targets:
+              - type: "ssh"
+                id: "test_target"
+                address: "10.0.5.53"
+                username: "test_user"
+                credentialName: "test_credential"
+          EOF
+
+          echo "📝 DEBUG: Verifying created config file:"
+          cat /tmp/breeder-test-config.yaml
+
           CREATE_OUTPUT=$(docker run --rm --network host \
             -v /tmp/breeder-test-config.yaml:/breeder-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
@@ -255,6 +294,42 @@ jobs:
 
           # Test 5: Update breeder (if implemented)
           echo "🔧 BREEDER UPDATE - Updating breeder:"
+
+          # Create test breeder update config
+          cat > /tmp/breeder-update-config.yaml << 'EOF'
+          uuid: "PLACEHOLDER_UUID"
+          name: "updated-smoke-test-breeder"
+          description: "Updated smoke test breeder"
+          config:
+            meta:
+              configVersion: "0.2"
+            breeder:
+              type: "linux_performance"
+            settings:
+              sysctl:
+                vm.swappiness:
+                  step: 5
+                  constraints:
+                    lower: 10
+                    upper: 90
+            objectives:
+              - name: "test_metric"
+                direction: minimize
+                reconnaissance:
+                  service: prometheus
+                  query: "scalar(test_metric)"
+                  stabilization_seconds: 1
+                  samples: 1
+                  interval: 1
+            effectuation:
+              targets:
+                - type: "ssh"
+                  id: "test_target"
+                  address: "10.0.5.53"
+                  username: "test_user"
+                  credentialName: "test_credential"
+          EOF
+
           # Update config with actual UUID
           sed "s/PLACEHOLDER_UUID/${BREEDER_UUID}/" /tmp/breeder-update-config.yaml > /tmp/breeder-update-config-final.yaml
 
@@ -362,6 +437,18 @@ jobs:
           
           # Test 2: Create a new credential
           echo "🔨 CREDENTIAL CREATE - Creating test credential:"
+
+          # Create test credential config
+          cat > /tmp/credential-test-config.yaml << 'EOF'
+          name: "smoke-test-ssh-key"
+          credential_type: "ssh_private_key"
+          description: "SSH key for smoke testing"
+          content: |
+            -----BEGIN RSA PRIVATE KEY-----
+            MIIEpAIBAAKCAQEA2Z2H7V...
+            -----END RSA PRIVATE KEY-----
+          EOF
+
           CREATE_OUTPUT=$(docker run --rm --network host \
             -v /tmp/credential-test-config.yaml:/credential-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
