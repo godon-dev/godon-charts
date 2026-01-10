@@ -229,6 +229,9 @@ jobs:
           # Fetch config from upstream godon repository to unique filename
           curl -s https://raw.githubusercontent.com/godon-dev/godon/refs/heads/master/examples/network.yml -o network-upstream.yml
 
+          # Fix file permissions so container can read it
+          chmod 644 network-upstream.yml
+
           echo "📝 DEBUG: Verifying fetched config file:"
           cat network-upstream.yml
           echo "File exists in workflow: $(ls -la network-upstream.yml)"
@@ -236,6 +239,8 @@ jobs:
           CREATE_OUTPUT=$(docker run --rm --network host \
             -v $(pwd):/work:ro \
             -w /work \
+            -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
+            -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             breeder create --name="smoke-test-breeder" --file=network-upstream.yml 2>&1 || true)
 
