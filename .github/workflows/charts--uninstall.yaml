@@ -1,4 +1,4 @@
-name: Uninstall Godon Chart
+name: "Uninstall Godon Chart"
 
 on:
   workflow_dispatch:
@@ -15,32 +15,39 @@ on:
 jobs:
   uninstall-chart:
     name: Uninstall Godon from KIND
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
       with:
         fetch-depth: 1
 
-    - name: Check KIND cluster status
+    - name: Verify KIND Cluster
       run: |
-        echo "🔍 Checking KIND cluster status..."
-        if kind get clusters | grep -q "kind"; then
-          echo "✅ KIND cluster exists"
-          kubectl config current-context
-          kubectl get nodes
-        else
-          echo "❌ No KIND cluster found"
+        echo "🔍 Verifying KIND cluster..."
+
+        if ! kind get clusters | grep -q "godon-1-cluster"; then
+          echo "❌ KIND cluster 'godon-1-cluster' not found"
+          echo "Available clusters:"
+          kind get clusters
           exit 1
         fi
 
+        echo "✅ KIND cluster exists"
+        kind export kubeconfig --name=godon-1-cluster --kubeconfig=/tmp/kind_kubeconfig.yaml
+        kubectl cluster-info --kubeconfig=/tmp/kind_kubeconfig.yaml
+
     - name: List installed Helm releases
+      env:
+        KUBECONFIG: /tmp/kind_kubeconfig.yaml
       run: |
         echo "📋 Listing all Helm releases..."
         helm list --all-namespaces || echo "No releases found"
 
     - name: Show current Godon resources
+      env:
+        KUBECONFIG: /tmp/kind_kubeconfig.yaml
       run: |
         echo "📊 Showing current Godon resources..."
         echo "Namespaces:"
@@ -53,41 +60,43 @@ jobs:
         kubectl get pv,pvc -n godon 2>/dev/null || echo "No PVs/PVCs found"
 
     - name: Uninstall Godon chart
+      env:
+        KUBECONFIG: /tmp/kind_kubeconfig.yaml
       run: |
         echo "🗑️  Uninstalling Godon chart..."
-        cd charts/godon
 
-        # Check if godon release exists
-        if helm list -n godon | grep -q "godon"; then
-          echo "Uninstalling godon release..."
-          helm uninstall godon -n godon
-          echo "✅ Godon chart uninstalled"
-        else
-          echo "⚠️  No godon release found in namespace godon"
-        fi
+        # Uninstall with --ignore-not-found to handle case where it's already gone
+        helm uninstall godon -n godon --wait --ignore-not-found
+        echo "✅ Godon chart uninstall command completed"
 
     - name: Wait for pod termination
+      env:
+        KUBECONFIG: /tmp/kind_kubeconfig.yaml
       run: |
         echo "⏳ Waiting for pods to terminate..."
-        timeout=60
-        elapsed=0
-        while [ $elapsed -lt $timeout ]; do
-          POD_COUNT=$(kubectl get pods -n godon 2>/dev/null | grep -v NAME | wc -l)
-          if [ "$POD_COUNT" -eq 0 ]; then
-            echo "✅ All pods terminated"
-            break
-          fi
-          echo "Waiting for $POD_COUNT pod(s) to terminate... ($elapsed/${timeout}s)"
-          sleep 5
-          elapsed=$((elapsed + 5))
-        done
+        kubectl wait --for=delete pod,job,deployment -l app.kubernetes.io/instance=godon -n godon --timeout=60s || true
 
-        if [ $elapsed -ge $timeout ]; then
-          echo "⚠️  Timeout waiting for pods to terminate"
-          kubectl get pods -n godon
+        # Force delete any remaining jobs
+        sleep 3
+        REMAINING_JOBS=$(kubectl -n godon get jobs -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+        if [ -n "$REMAINING_JOBS" ]; then
+          echo "⚠️ Found remaining jobs: $REMAINING_JOBS"
+          kubectl -n godon delete jobs --all --force --grace-period=0 || true
         fi
 
+        echo "✅ All pods and jobs terminated"
+
+    - name: Delete PersistentVolumes for clean slate
+      env:
+        KUBECONFIG: /tmp/kind_kubeconfig.yaml
+      run: |
+        echo "🗑️ Deleting persistent volumes..."
+        kubectl -n godon delete pvc --all --force --grace-period=0 || true
+        echo "✅ PVCs deleted"
+
     - name: Show remaining resources
+      env:
+        KUBECONFIG: /tmp/kind_kubeconfig.yaml
       run: |
         echo "📊 Showing remaining resources after uninstall..."
         echo ""
@@ -103,19 +112,18 @@ jobs:
         echo "Secrets:"
         kubectl get secrets -n godon 2>/dev/null || echo "No secrets"
         echo ""
-        echo "PersistentVolumes:"
-        kubectl get pv | grep godon || echo "No PVs"
-        echo ""
         echo "PersistentVolumeClaims:"
         kubectl get pvc -n godon 2>/dev/null || echo "No PVCs"
 
     - name: Clean up namespace (if requested)
       if: github.event.inputs.keep_namespace != 'true'
+      env:
+        KUBECONFIG: /tmp/kind_kubeconfig.yaml
       run: |
         echo "🧹 Deleting godon namespace..."
         kubectl delete namespace godon --timeout=60s || echo "⚠️  Namespace deletion timed out or failed"
-        echo ""
-        echo "Waiting for namespace deletion..."
+
+        # Wait for namespace deletion
         timeout=90
         elapsed=0
         while [ $elapsed -lt $timeout ]; do
@@ -134,6 +142,8 @@ jobs:
 
     - name: Clean up orphaned PVs
       if: github.event.inputs.keep_namespace != 'true'
+      env:
+        KUBECONFIG: /tmp/kind_kubeconfig.yaml
       run: |
         echo "🧹 Checking for orphaned PersistentVolumes..."
         PV_LIST=$(kubectl get pv -o json | jq -r '.items[] | select(.spec.claimRef.namespace == "godon") | .metadata.name')
@@ -151,6 +161,8 @@ jobs:
         fi
 
     - name: Verify cleanup
+      env:
+        KUBECONFIG: /tmp/kind_kubeconfig.yaml
       run: |
         echo "🔍 Verifying cleanup..."
         echo ""
@@ -165,6 +177,8 @@ jobs:
 
     - name: Final cluster status
       if: always()
+      env:
+        KUBECONFIG: /tmp/kind_kubeconfig.yaml
       run: |
         echo "📊 Final cluster status..."
         echo ""
