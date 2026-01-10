@@ -120,39 +120,39 @@ jobs:
         run: |
           echo "📝 Creating test configuration files..."
           
-          # Create test breeder config
+          # Create test breeder config - matching CI test format
           cat > /tmp/breeder-test-config.yaml << 'EOF'
-          meta:
-            configVersion: "0.2"
-
           breeder:
-            type: "linux_performance"
+            type: linux_performance
 
-          settings:
-            sysctl:
-              vm.swappiness:
-                step: 1
-                constraints:
-                  lower: 1
-                  upper: 100
-
-          objectives:
-            - name: "test_metric"
-              direction: minimize
-              reconnaissance:
-                service: prometheus
-                query: "scalar(test_metric)"
-                stabilization_seconds: 1
-                samples: 1
-                interval: 1
+          run:
+            parallel: 1
+            completion_criteria:
+              iterations:
+                min: 10
+                max: 100
 
           effectuation:
             targets:
-              - type: "ssh"
-                id: "test_target"
-                address: "10.0.5.53"
-                username: "test_user"
-                credentialName: "test_credential"
+              - type: ssh
+                address: test.local
+                connection:
+                  username: test_user
+                  private_key: /path/to/key
+
+          cooperation:
+            active: false
+
+          objectives:
+            - name: test_metric
+              direction: minimize
+
+          settings:
+            sysctl:
+              vm_swappiness:
+                constraints:
+                  upper: 100
+                  lower: 0
           EOF
 
           echo "📝 DEBUG: Verifying created config file:"
@@ -226,39 +226,39 @@ jobs:
           # Test 2: Create a new breeder
           echo "🔨 BREEDER CREATE - Creating test breeder:"
 
-          # Create test breeder config
+          # Create test breeder config - matching CI test format
           cat > /tmp/breeder-test-config.yaml << 'EOF'
-          meta:
-            configVersion: "0.2"
-
           breeder:
-            type: "linux_performance"
+            type: linux_performance
 
-          settings:
-            sysctl:
-              vm.swappiness:
-                step: 1
-                constraints:
-                  lower: 1
-                  upper: 100
-
-          objectives:
-            - name: "test_metric"
-              direction: minimize
-              reconnaissance:
-                service: prometheus
-                query: "scalar(test_metric)"
-                stabilization_seconds: 1
-                samples: 1
-                interval: 1
+          run:
+            parallel: 1
+            completion_criteria:
+              iterations:
+                min: 10
+                max: 100
 
           effectuation:
             targets:
-              - type: "ssh"
-                id: "test_target"
-                address: "10.0.5.53"
-                username: "test_user"
-                credentialName: "test_credential"
+              - type: ssh
+                address: test.local
+                connection:
+                  username: test_user
+                  private_key: /path/to/key
+
+          cooperation:
+            active: false
+
+          objectives:
+            - name: test_metric
+              direction: minimize
+
+          settings:
+            sysctl:
+              vm_swappiness:
+                constraints:
+                  upper: 100
+                  lower: 0
           EOF
 
           echo "📝 DEBUG: Verifying created config file:"
@@ -367,12 +367,12 @@ jobs:
           # Test 2: Non-existent breeder
           echo "❌ BREEDER SHOW - Non-existent breeder:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="00000000-0000-0000-0000-000000000000" || echo "✅ Non-existent breeder properly handled"
-          
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="00000000-0000-4000-8000-000000000000" || echo "✅ Non-existent breeder properly handled"
+
           # Test 3: Delete non-existent breeder
           echo "❌ BREEDER PURGE - Non-existent breeder:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="99999999-9999-9999-9999-999999999999" || echo "✅ Non-existent breeder deletion properly handled"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="99999999-9999-4999-9999-999999999999" || echo "✅ Non-existent breeder deletion properly handled"
           
           # Test 4: Malformed breeder config
           echo "❌ BREEDER CREATE - Malformed config:"
@@ -506,12 +506,12 @@ jobs:
           # Test 2: Non-existent credential
           echo "❌ CREDENTIAL SHOW - Non-existent credential:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="00000000-0000-0000-0000-000000000000" || echo "✅ Non-existent credential properly handled"
-          
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="00000000-0000-4000-8000-000000000000" || echo "✅ Non-existent credential properly handled"
+
           # Test 3: Delete non-existent credential
           echo "❌ CREDENTIAL DELETE - Non-existent credential:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="99999999-9999-9999-9999-999999999999" || echo "✅ Non-existent credential deletion properly handled"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="99999999-9999-4999-9999-999999999999" || echo "✅ Non-existent credential deletion properly handled"
           
           # Test 4: Malformed credential config
           echo "❌ CREDENTIAL CREATE - Malformed config:"
