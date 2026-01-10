@@ -57,10 +57,19 @@ jobs:
             sleep 2
           fi
 
-          # Delete persistent volumes for truly clean slate
-          echo "🗑️ Deleting persistent volumes for clean slate..."
+          # Delete ALL PVCs including Windmill's to fix database corruption issues
+          echo "🗑️ Deleting ALL persistent volumes for truly clean slate..."
+          echo "This includes Windmill database PVCs to fix schema violations"
           kubectl -n godon delete pvc --all --force --grace-period=0 || true
-          sleep 2
+          sleep 5
+
+          # Double-check all PVCs are gone
+          REMAINING_PVCS=$(kubectl -n godon get pvc --no-headers 2>/dev/null | wc -l)
+          if [ "$REMAINING_PVCS" -gt 0 ]; then
+            echo "⚠️ Found $REMAINING_PVCS remaining PVCs, force deleting again..."
+            kubectl -n godon delete pvc --all --force --grace-period=0 --timeout=10s || true
+            sleep 3
+          fi
 
           echo "✅ Cleanup complete"
 
