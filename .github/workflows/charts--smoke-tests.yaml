@@ -242,7 +242,7 @@ jobs:
             -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
             -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="smoke-test-breeder" --file=network-upstream.yml 2>&1 || true)
+            breeder create --name="smoke-test-breeder" --file=network-upstream.yml --output=json 2>&1 || true)
 
           echo "Create output: ${CREATE_OUTPUT}"
 
@@ -427,7 +427,7 @@ jobs:
           CREATE_OUTPUT=$(docker run --rm --network host \
             -v /tmp/credential-test-config.yaml:/credential-config.yaml:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            credential create --file=/credential-config.yaml 2>&1)
+            credential create --file=/credential-config.yaml --output=json 2>&1)
           
           echo "${CREATE_OUTPUT}"
           
@@ -627,7 +627,7 @@ jobs:
             --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list 2>/dev/null || echo "[]")
           
           # Extract UUIDs of test breeders (those containing "stress-test" or "smoke-test")
-          echo "${BREEDER_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test")) | .uuid' 2>/dev/null | while read UUID; do
+          echo "${BREEDER_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test")) | .id' 2>/dev/null | while read UUID; do
             if [ -n "${UUID}" ]; then
               echo "Deleting breeder: ${UUID}"
               docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
