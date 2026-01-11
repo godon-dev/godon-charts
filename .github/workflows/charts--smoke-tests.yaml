@@ -237,7 +237,7 @@ jobs:
           echo "File exists in workflow: $(ls -la network-upstream.yml)"
 
           CREATE_OUTPUT=$(docker run --rm --network host \
-            -v $(pwd):/work:ro \
+            -v $(pwd):/work \
             -w /work \
             -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
             -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
@@ -333,61 +333,99 @@ jobs:
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
           API_HOST="${{ env.API_HOST }}"
           API_PORT="${{ env.API_PORT }}"
-          
-          # Test 1: Invalid UUID format
-          echo "❌ BREEDER SHOW - Invalid UUID format:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="invalid-uuid-format" || echo "✅ Invalid UUID properly rejected"
-          
-          # Test 2: Non-existent breeder
-          echo "❌ BREEDER SHOW - Non-existent breeder:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="00000000-0000-4000-8000-000000000000" || echo "✅ Non-existent breeder properly handled"
 
-          # Test 3: Delete non-existent breeder
-          echo "❌ BREEDER PURGE - Non-existent breeder:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="99999999-9999-4999-9999-999999999999" || echo "✅ Non-existent breeder deletion properly handled"
-          
-          # Test 4: Malformed breeder config
-          echo "❌ BREEDER CREATE - Malformed config:"
-          cat > /tmp/malformed-breeder-config.yaml << 'EOF'
+          # Create all test config files first
+          echo "Creating test config files..."
+          cat > malformed-breeder-config.yaml << 'EOF'
           malformed: yaml content
           invalid:
           EOF
 
-          docker run --rm --network host \
-            -v /tmp/malformed-breeder-config.yaml:/malformed-config.yaml:ro \
+          cat > special-chars-breeder-config.yaml << 'EOF'
+          meta:
+            configVersion: "0.2"
+          settings:
+            test: value
+          EOF
+
+          cat > unicode-breeder-config.yaml << 'EOF'
+          meta:
+            configVersion: "0.2"
+          settings:
+            test: value
+          EOF
+
+          # Fix permissions to ensure container can read them
+          chmod 644 *.yaml
+
+          echo "✅ Test files created"
+          echo "📝 DEBUG: Listing created files:"
+          ls -la *.yaml
+          echo "📝 DEBUG: Current directory: $(pwd)"
+
+          # Test 1: Invalid UUID format
+          echo "🧪 TEST: BREEDER SHOW with invalid UUID format (should reject):"
+          if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="invalid-uuid-format" 2>&1; then
+            echo "❌ FAIL: Should have rejected invalid UUID format"
+          else
+            echo "✅ PASS: Invalid UUID format properly rejected"
+          fi
+
+          # Test 2: Non-existent breeder
+          echo "🧪 TEST: BREEDER SHOW with non-existent UUID (should return error):"
+          if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="00000000-0000-4000-8000-000000000000" 2>&1; then
+            echo "❌ FAIL: Should have returned error for non-existent breeder"
+          else
+            echo "✅ PASS: Non-existent breeder properly handled"
+          fi
+
+          # Test 3: Delete non-existent breeder
+          echo "🧪 TEST: BREEDER PURGE with non-existent UUID (should return error):"
+          if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="99999999-9999-4999-9999-999999999999" 2>&1; then
+            echo "❌ FAIL: Should have returned error for non-existent breeder"
+          else
+            echo "✅ PASS: Non-existent breeder deletion properly handled"
+          fi
+
+          # Test 4: Malformed breeder config
+          echo "🧪 TEST: BREEDER CREATE with malformed config (should reject):"
+          echo "📝 DEBUG: Mounting $(pwd) to /work"
+          if docker run --rm --network host \
+            -v $(pwd):/work \
+            -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="malformed" --file=/malformed-config.yaml || echo "✅ Malformed config properly rejected"
+            breeder create --name="malformed" --file=malformed-breeder-config.yaml 2>&1; then
+            echo "❌ FAIL: Should have rejected malformed config"
+          else
+            echo "✅ PASS: Malformed config properly rejected"
+          fi
           
           # Test 5: Breeder name with special characters
-          echo "🔍 BREEDER CREATE - Special characters in name:"
-          cat > /tmp/special-chars-breeder-config.yaml << 'EOF'
-          meta:
-            configVersion: "0.2"
-          settings:
-            test: value
-          EOF
-
-          docker run --rm --network host \
-            -v /tmp/special-chars-breeder-config.yaml:/special-chars-config.yaml:ro \
+          echo "🧪 TEST: BREEDER CREATE with special characters in name:"
+          if docker run --rm --network host \
+            -v $(pwd):/work \
+            -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="test-breeder-with-special-chars" --file=/special-chars-config.yaml || echo "✅ Special characters handled or rejected"
-          
+            breeder create --name="test-breeder-with-special-chars" --file=special-chars-breeder-config.yaml 2>&1; then
+            echo "✅ PASS: Special characters accepted"
+          else
+            echo "✅ PASS: Special characters handled or rejected (both acceptable)"
+          fi
+
           # Test 6: Unicode breeder name
-          echo "🔍 BREEDER CREATE - Unicode characters in name:"
-          cat > /tmp/unicode-breeder-config.yaml << 'EOF'
-          meta:
-            configVersion: "0.2"
-          settings:
-            test: value
-          EOF
-
-          docker run --rm --network host \
-            -v /tmp/unicode-breeder-config.yaml:/unicode-config.yaml:ro \
+          echo "🧪 TEST: BREEDER CREATE with unicode characters in name:"
+          if docker run --rm --network host \
+            -v $(pwd):/work \
+            -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="test-breeder-unicode-🚀-测试" --file=/unicode-config.yaml || echo "✅ Unicode characters handled or rejected"
+            breeder create --name="test-breeder-unicode-🚀-测试" --file=unicode-breeder-config.yaml 2>&1; then
+            echo "✅ PASS: Unicode characters accepted"
+          else
+            echo "✅ PASS: Unicode characters handled or rejected (both acceptable)"
+          fi
           
           # Test 7: Empty breeder list scenario
           echo "📋 BREEDER LIST - Verify empty list handling:"
@@ -414,9 +452,9 @@ jobs:
           echo "🔨 CREDENTIAL CREATE - Creating test credential:"
 
           # Create test credential config
-          cat > /tmp/credential-test-config.yaml << 'EOF'
+          cat > credential-test-config.yaml << 'EOF'
           name: "smoke-test-ssh-key"
-          credential_type: "ssh_private_key"
+          credentialType: "ssh_private_key"
           description: "SSH key for smoke testing"
           content: |
             -----BEGIN RSA PRIVATE KEY-----
@@ -424,10 +462,13 @@ jobs:
             -----END RSA PRIVATE KEY-----
           EOF
 
+          chmod 644 credential-test-config.yaml
+
           CREATE_OUTPUT=$(docker run --rm --network host \
-            -v /tmp/credential-test-config.yaml:/credential-config.yaml:ro \
+            -v $(pwd):/work:ro \
+            -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            credential create --file=/credential-config.yaml --output=json 2>&1)
+            credential create --file=credential-test-config.yaml --output=json 2>&1)
           
           echo "${CREATE_OUTPUT}"
           
@@ -472,80 +513,122 @@ jobs:
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
           API_HOST="${{ env.API_HOST }}"
           API_PORT="${{ env.API_PORT }}"
-          
-          # Test 1: Invalid UUID format
-          echo "❌ CREDENTIAL SHOW - Invalid UUID format:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="invalid-uuid-format" || echo "✅ Invalid UUID properly rejected"
-          
-          # Test 2: Non-existent credential
-          echo "❌ CREDENTIAL SHOW - Non-existent credential:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="00000000-0000-4000-8000-000000000000" || echo "✅ Non-existent credential properly handled"
 
-          # Test 3: Delete non-existent credential
-          echo "❌ CREDENTIAL DELETE - Non-existent credential:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="99999999-9999-4999-9999-999999999999" || echo "✅ Non-existent credential deletion properly handled"
-          
-          # Test 4: Malformed credential config
-          echo "❌ CREDENTIAL CREATE - Malformed config:"
-          cat > /tmp/malformed-credential-config.yaml << 'EOF'
+          # Create all test config files first
+          echo "Creating test config files..."
+          cat > malformed-credential-config.yaml << 'EOF'
           name: ""
           credentialType: "invalid_type"
           content: ""
           EOF
-          
-          docker run --rm --network host \
-            -v /tmp/malformed-credential-config.yaml:/malformed-cred-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            credential create --file=/malformed-cred-config.yaml || echo "✅ Malformed config properly rejected"
-          
-          # Test 5: Invalid credential type
-          echo "❌ CREDENTIAL CREATE - Invalid credential type:"
-          cat > /tmp/invalid-type-credential-config.yaml << 'EOF'
+
+          cat > invalid-type-credential-config.yaml << 'EOF'
           name: "test-invalid-type"
           credentialType: "non_existent_type"
           description: "Testing invalid credential type"
           content: "test content"
           EOF
-          
-          docker run --rm --network host \
-            -v /tmp/invalid-type-credential-config.yaml:/invalid-type-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            credential create --file=/invalid-type-config.yaml || echo "✅ Invalid credential type properly rejected"
-          
-          # Test 6: Empty credential content
-          echo "❌ CREDENTIAL CREATE - Empty content:"
-          cat > /tmp/empty-content-credential-config.yaml << 'EOF'
+
+          cat > empty-content-credential-config.yaml << 'EOF'
           name: "test-empty-content"
           credentialType: "ssh_private_key"
           description: "Testing empty content"
           content: ""
           EOF
-          
-          docker run --rm --network host \
-            -v /tmp/empty-content-credential-config.yaml:/empty-content-config.yaml:ro \
-            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            credential create --file=/empty-content-config.yaml || echo "✅ Empty content properly rejected"
-          
-          # Test 7: Credential name with special characters
-          echo "🔍 CREDENTIAL CREATE - Special characters in name:"
-          cat > /tmp/special-chars-credential-config.yaml << 'EOF'
+
+          cat > special-chars-credential-config.yaml << 'EOF'
           name: "test-cred-with-special-chars-<>-\"-\\-"
           credentialType: "ssh_private_key"
           description: "Testing special character handling"
           content: >
             -----BEGIN RSA PRIVATE KEY-----
             MIIEpAIBAAKCAQEA2Z9Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
-            2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
+            2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
             -----END RSA PRIVATE KEY-----
           EOF
-          
-          docker run --rm --network host \
-            -v /tmp/special-chars-credential-config.yaml:/special-chars-cred-config.yaml:ro \
+
+          # Fix permissions to ensure container can read them
+          chmod 644 *.yaml
+
+          echo "✅ Test files created"
+          echo "📝 DEBUG: Listing created files:"
+          ls -la *.yaml
+          echo "📝 DEBUG: Current directory: $(pwd)"
+
+          # Test 1: Invalid UUID format
+          echo "🧪 TEST: CREDENTIAL SHOW with invalid UUID format (should reject):"
+          if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="invalid-uuid-format" 2>&1; then
+            echo "❌ FAIL: Should have rejected invalid UUID format"
+          else
+            echo "✅ PASS: Invalid UUID format properly rejected"
+          fi
+
+          # Test 2: Non-existent credential
+          echo "🧪 TEST: CREDENTIAL SHOW with non-existent UUID (should return error):"
+          if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="00000000-0000-4000-8000-000000000000" 2>&1; then
+            echo "❌ FAIL: Should have returned error for non-existent credential"
+          else
+            echo "✅ PASS: Non-existent credential properly handled"
+          fi
+
+          # Test 3: Delete non-existent credential
+          echo "🧪 TEST: CREDENTIAL DELETE with non-existent UUID (should return error):"
+          if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="99999999-9999-4999-9999-999999999999" 2>&1; then
+            echo "❌ FAIL: Should have returned error for non-existent credential"
+          else
+            echo "✅ PASS: Non-existent credential deletion properly handled"
+          fi
+
+          # Test 4: Malformed credential config
+          echo "🧪 TEST: CREDENTIAL CREATE with malformed config (should reject):"
+          if docker run --rm --network host \
+            -v $(pwd):/work \
+            -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            credential create --file=/special-chars-cred-config.yaml || echo "✅ Special characters handled or rejected"
+            credential create --file=malformed-credential-config.yaml 2>&1; then
+            echo "❌ FAIL: Should have rejected malformed config"
+          else
+            echo "✅ PASS: Malformed config properly rejected"
+          fi
+
+          # Test 5: Invalid credential type
+          echo "🧪 TEST: CREDENTIAL CREATE with invalid credential type (should reject):"
+          if docker run --rm --network host \
+            -v $(pwd):/work \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            credential create --file=invalid-type-credential-config.yaml 2>&1; then
+            echo "❌ FAIL: Should have rejected invalid credential type"
+          else
+            echo "✅ PASS: Invalid credential type properly rejected"
+          fi
+
+          # Test 6: Empty credential content
+          echo "🧪 TEST: CREDENTIAL CREATE with empty content (should reject):"
+          if docker run --rm --network host \
+            -v $(pwd):/work \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            credential create --file=empty-content-credential-config.yaml 2>&1; then
+            echo "❌ FAIL: Should have rejected empty content"
+          else
+            echo "✅ PASS: Empty content properly rejected"
+          fi
+
+          # Test 7: Credential name with special characters
+          echo "🧪 TEST: CREDENTIAL CREATE with special characters in name:"
+          if docker run --rm --network host \
+            -v $(pwd):/work \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            credential create --file=special-chars-credential-config.yaml 2>&1; then
+            echo "✅ PASS: Special characters accepted"
+          else
+            echo "✅ PASS: Special characters handled or rejected (both acceptable)"
+          fi
           
           # Test 8: Empty credential list scenario
           echo "📋 CREDENTIAL LIST - Verify empty list handling:"
@@ -566,7 +649,7 @@ jobs:
           # Create multiple breeders in succession
           echo "🔨 Creating multiple breeders..."
           for i in {1..5}; do
-            cat > /tmp/breeder-stress-config-${i}.yaml << EOF
+            cat > breeder-stress-config-${i}.yaml << EOF
           meta:
             configVersion: "0.2"
           settings:
@@ -575,9 +658,10 @@ jobs:
           EOF
 
             docker run --rm --network host \
-              -v /tmp/breeder-stress-config-${i}.yaml:/breeder-config.yaml:ro \
+              -v $(pwd):/work \
+              -w /work \
               "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              breeder create --name="stress-test-breeder-${i}" --file=/breeder-config.yaml || echo "⚠️  Breeder ${i} creation failed"
+              breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml || echo "⚠️  Breeder ${i} creation failed"
           done
           
           # List all breeders to verify
@@ -588,7 +672,7 @@ jobs:
           # Create multiple credentials in succession  
           echo "🔨 Creating multiple credentials..."
           for i in {1..3}; do
-            cat > /tmp/credential-stress-config-${i}.yaml << EOF
+            cat > credential-stress-config-${i}.yaml << EOF
           name: "stress-test-cred-${i}"
           credentialType: "ssh_private_key"
           description: "Stress test credential ${i}"
@@ -600,9 +684,10 @@ jobs:
           EOF
           
             docker run --rm --network host \
-              -v /tmp/credential-stress-config-${i}.yaml:/credential-config.yaml:ro \
+              -v $(pwd):/work \
+              -w /work \
               "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              credential create --file=/credential-config.yaml || echo "⚠️  Credential ${i} creation failed"
+              credential create --file=credential-stress-config-${i}.yaml || echo "⚠️  Credential ${i} creation failed"
           done
           
           # List all credentials to verify
