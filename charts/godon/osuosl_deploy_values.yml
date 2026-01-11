@@ -8,7 +8,7 @@ godon_seeder:
     tag: "0.0.18"
   env:
   - name: CONTROLLER_VERSION
-    value: "0.12.0"
+    value: "0.13.0"
   - name: BREEDER_VERSION
     value: "0.7.0"
   - name: WINDMILL_BASE_URL
