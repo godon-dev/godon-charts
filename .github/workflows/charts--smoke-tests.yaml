@@ -676,6 +676,8 @@ jobs:
                 credentialName: "test_credential_${i}"
           EOF
 
+            chmod 644 breeder-stress-config-${i}.yaml
+
             docker run --rm --network host \
               -v $(pwd):/work \
               -w /work \
