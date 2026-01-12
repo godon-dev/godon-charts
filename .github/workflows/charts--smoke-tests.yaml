@@ -649,9 +649,31 @@ jobs:
             cat > breeder-stress-config-${i}.yaml << EOF
           meta:
             configVersion: "0.2"
+          breeder:
+            type: "linux_performance"
           settings:
-            test: "value_${i}"
-            iteration: ${i}
+            sysctl:
+              vm.swappiness:
+                step: 1
+                constraints:
+                  lower: 1
+                  upper: 100
+          objectives:
+            - name: "test_metric_${i}"
+              direction: minimize
+              reconnaissance:
+                service: prometheus
+                query: "scalar(test_metric_${i})"
+                stabilization_seconds: 1
+                samples: 1
+                interval: 1
+          effectuation:
+            targets:
+              - type: "ssh"
+                id: "test_target_${i}"
+                address: "10.0.5.${i}"
+                username: "test_user"
+                credentialName: "test_credential_${i}"
           EOF
 
             docker run --rm --network host \
