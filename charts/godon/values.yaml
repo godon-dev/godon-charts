@@ -108,7 +108,7 @@ metrics_exporter:
 api:
   image:
     repository: "ghcr.io/godon-dev/godon-api"
-    tag: "0.0.16"
+    tag: "0.0.17"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
