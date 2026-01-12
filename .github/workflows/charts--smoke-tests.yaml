@@ -690,7 +690,7 @@ jobs:
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "⚠️  Breeder list failed"
           
-          # Create multiple credentials in succession  
+          # Create multiple credentials in succession
           echo "🔨 Creating multiple credentials..."
           for i in {1..3}; do
             cat > credential-stress-config-${i}.yaml << EOF
@@ -703,7 +703,9 @@ jobs:
             2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
             -----END RSA PRIVATE KEY-----
           EOF
-          
+
+            chmod 644 credential-stress-config-${i}.yaml
+
             docker run --rm --network host \
               -v $(pwd):/work \
               -w /work \
