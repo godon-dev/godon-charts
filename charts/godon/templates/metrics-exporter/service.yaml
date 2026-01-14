@@ -6,6 +6,13 @@ metadata:
   name: {{ printf "%s-metrics-exporter"  (include "godon.fullname" .) | trunc 58 | quote }}
   labels:
     service-type: "metrics-endpoint"
+    app.kubernetes.io/component: metrics-exporter
+  {{- with .Values.metrics_exporter.service }}
+  {{- if .annotations }}
+  annotations:
+    {{- toYaml .annotations | nindent 4 }}
+  {{- end }}
+  {{- end }}
 spec:
   type: "ClusterIP"
   ports:
