@@ -40,7 +40,7 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.15.0"
   - name: BREEDER_VERSION
-    value: "0.7.0"
+    value: "0.9.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -59,7 +59,7 @@ windmill:
 metrics_exporter:
   image:
     repository: "ghcr.io/godon-dev/godon-metrics-exporter"
-    tag: "0.0.2"
+    tag: "0.0.3"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -76,14 +76,10 @@ metrics_exporter:
       memory: 512Mi
 
   env:
-  - name: ARCHIVE_DB_HOST
-    value: "yb-tservers.archive-db.svc.cluster.local:5433"
-  - name: ARCHIVE_DB_USER
-    value: "yugabyte"
-  - name: ARCHIVE_DB_PW
-    value: "yugabyte"
-  - name: ARCHIVE_DB_DATABASE_NAME
-    value: "archive_db"
+  - name: PUSH_GATEWAY_URL
+    value: "http://godon-pushgateway:9091"
+  - name: PUSH_METRICS_ENABLED
+    value: "true"
 
   livenessProbe:
     enabled: false
@@ -101,6 +97,45 @@ metrics_exporter:
   volumes: []
 
   volumeMounts: []
+
+########################################
+## Component | Prometheus Push Gateway
+########################################
+pushgateway:
+  enabled: true
+
+  image:
+    repository: prom/pushgateway
+    tag: v1.9.0
+    pullPolicy: IfNotPresent
+
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  service:
+    type: ClusterIP
+    port: 9091
+
+  persistence:
+    enabled: false
+    size: 2Gi
+    storageClass: ""
+
+  # Optional service account
+  serviceAccount:
+    create: false
+
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
 
 ########################################
 ## Component | Godon API
@@ -205,6 +240,10 @@ archive-db:
     extraEnv:
       - name: YSQL_DB
         value: archive_db
+      - name: PUSH_GATEWAY_URL
+        value: "http://godon-pushgateway:9091"
+      - name: PUSH_METRICS_ENABLED
+        value: "true"
 
   authCredentials:
     ysql:
