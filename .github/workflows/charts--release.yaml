@@ -4,6 +4,11 @@ on:
   release:
     types: [created]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Chart version to publish (e.g., 0.2.10)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -26,26 +31,20 @@ jobs:
       - name: Get chart version
         id: chart-version
         run: |
-          # Read version from Chart.yaml (source of truth)
-          CHART_VERSION=$(grep "^version:" charts/godon/Chart.yaml | awk '{print $2}')
-          echo "version=${CHART_VERSION}" >> $GITHUB_OUTPUT
-          echo "Chart version: ${CHART_VERSION}"
-
-      - name: Validate tag matches chart version
-        if: github.event_name == 'release'
-        run: |
-          CHART_VERSION="${{ steps.chart-version.outputs.version }}"
-          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
-
-          if [ "$CHART_VERSION" != "$TAG_VERSION" ]; then
-            echo "❌ Error: Chart version (${CHART_VERSION}) doesn't match git tag (${TAG_VERSION})"
-            echo "Please either:"
-            echo "  1. Update Chart.yaml to version ${TAG_VERSION}"
-            echo "  2. Or create a tag matching version ${CHART_VERSION}"
-            exit 1
+          # Git tag is always source of truth
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_VERSION="${{ github.event.inputs.version }}"
+          else
+            TAG_VERSION="${GITHUB_REF#refs/tags/v}"
           fi
+          echo "version=${TAG_VERSION}" >> $GITHUB_OUTPUT
+          echo "Tag version: ${TAG_VERSION}"
 
-          echo "✅ Chart version and tag match: ${CHART_VERSION}"
+      - name: Update Chart.yaml to match tag
+        run: |
+          TAG_VERSION="${{ steps.chart-version.outputs.version }}"
+          sed -i "s/^version:.*/version: ${TAG_VERSION}/" charts/godon/Chart.yaml
+          echo "✅ Updated Chart.yaml to version ${TAG_VERSION}"
 
       - name: Package chart
         run: |
@@ -63,6 +62,7 @@ jobs:
           helm push godon-${CHART_VERSION}.tgz oci://ghcr.io/godon-dev/charts
 
       - name: Attach chart to GitHub Release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
         with:
           files: godon-*.tgz

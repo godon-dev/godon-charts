@@ -15,38 +15,33 @@ helm install godon godon/godon
 
 ## How to Release
 
-**Chart version is the source of truth.** The git tag MUST match the chart version.
+**Git tag is the source of truth.** The chart version is automatically updated to match the tag.
 
-1. **Update chart version** in `charts/godon/Chart.yaml`:
-   ```yaml
-   version: 0.2.11  # Bump this
-   appVersion: 0.0.7  # Bump if app changed
-   ```
-
-2. **Commit and push**:
+1. **Commit any chart changes** (don't worry about version):
    ```bash
-   git add charts/godon/Chart.yaml
-   git commit -m "Bump chart to 0.2.11"
+   # Make your changes...
+   git add charts/
+   git commit -m "Update chart"
    git push
    ```
 
-3. **Create matching git tag**:
+2. **Create git tag** (this sets the version):
    ```bash
-   git tag v0.2.11  # Must match Chart.yaml version!
+   git tag v0.2.11
    git push origin v0.2.11
    ```
 
-4. **Create GitHub Release**:
+3. **Create GitHub Release**:
    ```bash
    gh release create v0.2.11
    # Or via GitHub UI
    ```
 
-5. **Workflow automatically**:
-   - ✅ Validates tag matches chart version
+4. **Workflow automatically**:
+   - ✅ Updates Chart.yaml to match tag
    - ✅ Publishes to OCI: `oci://ghcr.io/godon-dev/charts/godon`
    - ✅ Publishes to GitHub Pages: `https://godon-dev.github.io/godon-charts/charts`
    - ✅ Updates `index.yaml`
    - ✅ Attaches chart `.tgz` to release
 
-**If tag doesn't match chart version**, the workflow will fail with a clear error message.
+**Note:** Chart version in Chart.yaml will be overwritten by the tag version during release.
