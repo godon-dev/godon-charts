@@ -42,7 +42,9 @@ jobs:
 
       - name: Package chart
         run: |
-          cd charts
+          cd charts/godon
+          helm dependency update
+          cd ..
           helm package godon
 
       - name: Login to GHCR
@@ -91,7 +93,9 @@ jobs:
 
       - name: Package chart
         run: |
-          cd charts
+          cd charts/godon
+          helm dependency update
+          cd ..
           helm package godon
 
       - name: Download existing index.yaml
