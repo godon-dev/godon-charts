@@ -1,0 +1,152 @@
+name: release
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.14.0
+
+      - name: Get chart version
+        id: chart-version
+        run: |
+          # Extract version from git tag (e.g., v0.2.10 -> 0.2.10)
+          CHART_VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=${CHART_VERSION}" >> $GITHUB_OUTPUT
+          echo "Publishing chart version: ${CHART_VERSION}"
+
+      - name: Package chart
+        run: |
+          cd charts
+          helm package godon
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Publish to OCI (Helm 3.8+)
+        run: |
+          CHART_VERSION="${{ steps.chart-version.outputs.version }}"
+          helm push godon-${CHART_VERSION}.tgz oci://ghcr.io/godon-dev/charts
+
+      - name: Attach chart to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: godon-*.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-github-pages:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.14.0
+
+      - name: Get chart version
+        id: chart-version
+        run: |
+          CHART_VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=${CHART_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Package chart
+        run: |
+          cd charts
+          helm package godon
+
+      - name: Download existing index.yaml
+        run: |
+          mkdir -p pages/charts
+          cd pages/charts
+
+          # Try to download existing index.yaml from GitHub Pages
+          if curl -s -o index.yaml https://godon-dev.github.io/godon-charts/charts/index.yaml; then
+            if [ -s index.yaml ]; then
+              echo "Found existing index.yaml"
+              cat index.yaml
+            else
+              echo "No existing index.yaml found (empty file)"
+              rm -f index.yaml
+            fi
+          else
+            echo "No existing index.yaml found (download failed)"
+          fi
+
+      - name: Copy chart and generate index
+        run: |
+          CHART_VERSION="${{ steps.chart-version.outputs.version }}"
+          CHART_FILE="godon-${CHART_VERSION}.tgz"
+
+          # Copy packaged chart
+          cp ${CHART_FILE} pages/charts/
+
+          # Generate or update index.yaml
+          cd pages/charts
+
+          if [ -f index.yaml ]; then
+            # Update existing index
+            helm repo index . --url https://godon-dev.github.io/godon-charts/charts --merge index.yaml
+          else
+            # Create new index
+            helm repo index . --url https://godon-dev.github.io/godon-charts/charts
+          fi
+
+      - name: Create README for pages
+        run: |
+          cat > pages/index.md << 'EOF'
+          # Godon Charts
+
+          ## Installation
+
+          ### Using Helm repository (Helm 2.x, 3.0-3.7):
+
+          ```bash
+          helm repo add godon https://godon-dev.github.io/godon-charts/charts
+          helm install godon godon/godon
+          ```
+
+          ### Using OCI registry (Helm 3.8+):
+
+          ```bash
+          helm install godon oci://ghcr.io/godon-dev/charts/godon
+          ```
+
+          ## Available Charts
+
+          See the [charts directory](./charts) for available versions.
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
