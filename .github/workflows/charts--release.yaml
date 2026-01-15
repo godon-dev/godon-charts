@@ -44,8 +44,8 @@ jobs:
         run: |
           cd charts/godon
           helm dependency update
-          cd ..
-          helm package godon
+          cd ../..
+          helm package charts/godon
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -95,8 +95,8 @@ jobs:
         run: |
           cd charts/godon
           helm dependency update
-          cd ..
-          helm package godon
+          cd ../..
+          helm package charts/godon
 
       - name: Download existing index.yaml
         run: |
