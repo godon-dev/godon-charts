@@ -113,14 +113,20 @@ jobs:
           # Try to download existing index.yaml from GitHub Pages
           if curl -s -o index.yaml https://godon-dev.github.io/godon-charts/charts/index.yaml; then
             if [ -s index.yaml ]; then
-              echo "Found existing index.yaml"
-              cat index.yaml
+              # Validate it's actually YAML (not a 404 page)
+              if grep -q "apiVersion:" index.yaml; then
+                echo "✅ Found valid existing index.yaml"
+                cat index.yaml
+              else
+                echo "⚠️ Downloaded file is not valid index.yaml (first publish?)"
+                rm -f index.yaml
+              fi
             else
-              echo "No existing index.yaml found (empty file)"
+              echo "⚠️ No existing index.yaml found (empty file)"
               rm -f index.yaml
             fi
           else
-            echo "No existing index.yaml found (download failed)"
+            echo "⚠️ No existing index.yaml found (download failed)"
           fi
 
       - name: Copy chart and generate index
