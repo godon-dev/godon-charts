@@ -3,6 +3,12 @@ name: release
 on:
   release:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Chart version to publish (e.g., 0.2.10)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -25,8 +31,12 @@ jobs:
       - name: Get chart version
         id: chart-version
         run: |
-          # Extract version from git tag (e.g., v0.2.10 -> 0.2.10)
-          CHART_VERSION="${GITHUB_REF#refs/tags/v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CHART_VERSION="${{ github.event.inputs.version }}"
+          else
+            # Extract version from git tag (e.g., v0.2.10 -> 0.2.10)
+            CHART_VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
           echo "version=${CHART_VERSION}" >> $GITHUB_OUTPUT
           echo "Publishing chart version: ${CHART_VERSION}"
 
