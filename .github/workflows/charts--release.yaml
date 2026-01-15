@@ -4,11 +4,6 @@ on:
   release:
     types: [created]
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Chart version to publish (e.g., 0.2.10)'
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -31,21 +26,33 @@ jobs:
       - name: Get chart version
         id: chart-version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            CHART_VERSION="${{ github.event.inputs.version }}"
-          else
-            # Extract version from git tag (e.g., v0.2.10 -> 0.2.10)
-            CHART_VERSION="${GITHUB_REF#refs/tags/v}"
-          fi
+          # Read version from Chart.yaml (source of truth)
+          CHART_VERSION=$(grep "^version:" charts/godon/Chart.yaml | awk '{print $2}')
           echo "version=${CHART_VERSION}" >> $GITHUB_OUTPUT
-          echo "Publishing chart version: ${CHART_VERSION}"
+          echo "Chart version: ${CHART_VERSION}"
+
+      - name: Validate tag matches chart version
+        if: github.event_name == 'release'
+        run: |
+          CHART_VERSION="${{ steps.chart-version.outputs.version }}"
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+
+          if [ "$CHART_VERSION" != "$TAG_VERSION" ]; then
+            echo "❌ Error: Chart version (${CHART_VERSION}) doesn't match git tag (${TAG_VERSION})"
+            echo "Please either:"
+            echo "  1. Update Chart.yaml to version ${TAG_VERSION}"
+            echo "  2. Or create a tag matching version ${CHART_VERSION}"
+            exit 1
+          fi
+
+          echo "✅ Chart version and tag match: ${CHART_VERSION}"
 
       - name: Package chart
         run: |
           cd charts/godon
           helm dependency update
-          cd ..
-          helm package godon
+          cd ../..
+          helm package charts/godon
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -95,8 +102,8 @@ jobs:
         run: |
           cd charts/godon
           helm dependency update
-          cd ..
-          helm package godon
+          cd ../..
+          helm package charts/godon
 
       - name: Download existing index.yaml
         run: |
