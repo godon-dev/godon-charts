@@ -52,6 +52,15 @@ windmill:
     workerGroups:
       - name: "default"
         replicas: 1
+        extraEnv:
+        - name: GODON_ARCHIVE_DB_SERVICE_HOST
+          value: "yb-tservers.archive-db.svc.cluster.local"
+        - name: GODON_ARCHIVE_DB_SERVICE_PORT
+          value: "5433"
+        - name: GODON_ARCHIVE_DB_USER
+          value: "yugabyte"
+        - name: GODON_ARCHIVE_DB_PASSWORD
+          value: "yugabyte"
 
 ########################################
 ## Component | Godon Metrics Exporter
