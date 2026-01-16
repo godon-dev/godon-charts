@@ -8,9 +8,9 @@ godon_seeder:
     tag: "0.0.18"
   env:
   - name: CONTROLLER_VERSION
-    value: "0.17.0"
+    value: "0.18.0"
   - name: BREEDER_VERSION
-    value: "0.11.0"
+    value: "0.12.0"
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
 
@@ -26,7 +26,15 @@ windmill:
         replicas: 1
         extraEnv:
         - name: WHITELIST_ENVS
-          value: "GODON_API_SERVICE_PORT,GODON_METADATA_DB_SERVICE_PORT,YB_TSERVER_SERVICE_SERVICE_PORT,GODON_API_SERVICE_HOST,GODON_METADATA_DB_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_PORT_TCP_YSQL_PORT"
+          value: "GODON_API_SERVICE_PORT,GODON_METADATA_DB_SERVICE_PORT,YB_TSERVER_SERVICE_SERVICE_PORT,GODON_API_SERVICE_HOST,GODON_METADATA_DB_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_PORT_TCP_YSQL_PORT,GODON_ARCHIVE_DB_SERVICE_HOST,GODON_ARCHIVE_DB_SERVICE_PORT,GODON_ARCHIVE_DB_USER,GODON_ARCHIVE_DB_PASSWORD"
+        - name: GODON_ARCHIVE_DB_SERVICE_HOST
+          value: "yb-tservers.archive-db.svc.cluster.local"
+        - name: GODON_ARCHIVE_DB_SERVICE_PORT
+          value: "5433"
+        - name: GODON_ARCHIVE_DB_USER
+          value: "yugabyte"
+        - name: GODON_ARCHIVE_DB_PASSWORD
+          value: "yugabyte"
   postgresql:
     image:
       repository: postgres

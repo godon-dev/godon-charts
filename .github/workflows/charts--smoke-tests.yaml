@@ -149,10 +149,11 @@ jobs:
 
           settings:
             sysctl:
-              vm_swappiness:
+              vm.swappiness:
                 constraints:
-                  upper: 100
-                  lower: 0
+                  - step: 1
+                    lower: 0
+                    upper: 100
           EOF
 
           echo "📝 DEBUG: Verifying created config file:"
@@ -283,10 +284,10 @@ jobs:
             settings:
               sysctl:
                 vm.swappiness:
-                  step: 5
                   constraints:
-                    lower: 10
-                    upper: 90
+                    - step: 5
+                      lower: 10
+                      upper: 90
             objectives:
               - name: "test_metric"
                 direction: minimize
@@ -654,10 +655,10 @@ jobs:
           settings:
             sysctl:
               vm.swappiness:
-                step: 1
                 constraints:
-                  lower: 1
-                  upper: 100
+                  - step: 1
+                    lower: 1
+                    upper: 100
           objectives:
             - name: "test_metric_${i}"
               direction: minimize
