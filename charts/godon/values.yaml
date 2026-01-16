@@ -40,7 +40,7 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.18.0"
   - name: BREEDER_VERSION
-    value: "0.12.0"
+    value: "0.13.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -54,7 +54,7 @@ windmill:
         replicas: 1
         extraEnv:
         - name: GODON_ARCHIVE_DB_SERVICE_HOST
-          value: "yb-tservers.archive-db.svc.cluster.local"
+          value: "yb-tservers.godon.svc.cluster.local"
         - name: GODON_ARCHIVE_DB_SERVICE_PORT
           value: "5433"
         - name: GODON_ARCHIVE_DB_USER
