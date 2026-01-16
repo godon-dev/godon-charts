@@ -54,7 +54,7 @@ windmill:
         replicas: 1
         extraEnv:
         - name: GODON_ARCHIVE_DB_SERVICE_HOST
-          value: "yb-tservers.archive-db.svc.cluster.local"
+          value: "yb-tservers.godon.svc.cluster.local"
         - name: GODON_ARCHIVE_DB_SERVICE_PORT
           value: "5433"
         - name: GODON_ARCHIVE_DB_USER
