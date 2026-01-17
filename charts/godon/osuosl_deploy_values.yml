@@ -8,9 +8,9 @@ godon_seeder:
     tag: "0.0.18"
   env:
   - name: CONTROLLER_VERSION
-    value: "0.19.0"
+    value: "0.20.0"
   - name: BREEDER_VERSION
-    value: "0.13.0"
+    value: "0.14.0"
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
 
