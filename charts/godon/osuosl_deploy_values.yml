@@ -22,9 +22,17 @@ windmill:
     tag: "1.601.1"
     lspReplicas: 0
     workerGroups:
-      - name: "default"
-        replicas: 1
+      # Controller workers - handle fast operations (preflight, breeder_create, etc)
+      # Timeout hierarchy: Script-level > Worker group DEFAULT_TIMEOUT_SECONDS > Global default
+      - name: "controller"
+        replicas: 3
         extraEnv:
+        - name: WORKER_GROUP
+          value: "controller"
+        - name: WORKER_TAGS
+          value: "controller"
+        - name: DEFAULT_TIMEOUT_SECONDS
+          value: "120"  # 2 minutes - fast controller operations
         - name: WHITELIST_ENVS
           value: "GODON_API_SERVICE_PORT,GODON_METADATA_DB_SERVICE_PORT,YB_TSERVER_SERVICE_SERVICE_PORT,GODON_API_SERVICE_HOST,GODON_METADATA_DB_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_PORT_TCP_YSQL_PORT,GODON_ARCHIVE_DB_SERVICE_HOST,GODON_ARCHIVE_DB_SERVICE_PORT,GODON_ARCHIVE_DB_USER,GODON_ARCHIVE_DB_PASSWORD"
         - name: GODON_ARCHIVE_DB_SERVICE_HOST
@@ -35,6 +43,40 @@ windmill:
           value: "yugabyte"
         - name: GODON_ARCHIVE_DB_PASSWORD
           value: "yugabyte"
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+
+      # Breeder workers - handle long-running breeder optimization jobs
+      # No timeout - continuous workers with crash recovery via Optuna DB
+      - name: "breeder"
+        replicas: 5
+        extraEnv:
+        - name: WORKER_GROUP
+          value: "breeder"
+        - name: WORKER_TAGS
+          value: "breeder"
+        - name: WHITELIST_ENVS
+          value: "GODON_API_SERVICE_PORT,GODON_METADATA_DB_SERVICE_PORT,YB_TSERVER_SERVICE_SERVICE_PORT,GODON_API_SERVICE_HOST,GODON_METADATA_DB_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_PORT_TCP_YSQL_PORT,GODON_ARCHIVE_DB_SERVICE_HOST,GODON_ARCHIVE_DB_SERVICE_PORT,GODON_ARCHIVE_DB_USER,GODON_ARCHIVE_DB_PASSWORD"
+        - name: GODON_ARCHIVE_DB_SERVICE_HOST
+          value: "yb-tservers.godon.svc.cluster.local"
+        - name: GODON_ARCHIVE_DB_SERVICE_PORT
+          value: "5433"
+        - name: GODON_ARCHIVE_DB_USER
+          value: "yugabyte"
+        - name: GODON_ARCHIVE_DB_PASSWORD
+          value: "yugabyte"
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
   postgresql:
     image:
       repository: postgres
