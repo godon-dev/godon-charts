@@ -261,6 +261,33 @@ metadata-db:
     password: meta_data
     database: meta_data
 
+  # Increase resources for 10 concurrent workers (3 controller + 5 breeder + 2 default)
+  # Increase max_connections for worker pool (default: 100)
+  # Each worker opens multiple connections for job processing
+  primary:
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    initdb:
+      args: "-E UTF8"
+    extendedConf:
+      max_connections: "200"
+      shared_buffers: "128MB"
+      effective_cache_size: "512MB"
+      maintenance_work_mem: "64MB"
+      checkpoint_completion_target: "0.9"
+      wal_buffers: "16MB"
+      default_statistics_target: "100"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+      work_mem: "2096kB"
+      min_wal_size: "1GB"
+      max_wal_size: "4GB"
+
 ########################################
 ## Component | Knowledge Archive Database for Cooperating Config Breeders
 ########################################

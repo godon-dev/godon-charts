@@ -97,6 +97,20 @@ windmill:
       repository: postgres
       tag: "14"
 
+  # Increase resources and connections for 10 concurrent workers
+  primary:
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    extendedConf:
+      max_connections: "200"
+      shared_buffers: "128MB"
+      effective_cache_size: "512MB"
+
 ########################################
 ## Component | Godon API
 ########################################
