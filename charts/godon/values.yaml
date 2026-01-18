@@ -23,7 +23,7 @@ godon_seeder:
   enabled: true
   image:
     repository: ghcr.io/godon-dev/godon-seeder
-    tag: 0.0.18
+    tag: 0.0.19
     pullPolicy: IfNotPresent
     pullSecret: ""
   resources:
@@ -40,7 +40,7 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.20.0"
   - name: BREEDER_VERSION
-    value: "0.14.0"
+    value: "0.15.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
