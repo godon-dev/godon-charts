@@ -82,7 +82,7 @@ jobs:
           helm install godon ./charts/godon/ \
                --dependency-update \
                --create-namespace --namespace godon \
-               --values ./charts/godon/osuosl_deploy_values.yml \
+               --values ./stacks/osuosl/test-stack.yaml \
                --wait=false --timeout 5m
 
       - name: Verify Deployment Readiness

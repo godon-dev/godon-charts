@@ -1,0 +1,51 @@
+---
+# OSUOSL Test Stack Configuration
+# This file contains ONLY the overrides specific to the OSUOSL test environment
+# All default values are inherited from charts/godon/values.yaml
+
+########################################
+## Component | Windmill Workflow Orchestration Engine
+########################################
+windmill:
+  windmill:
+    # Use specific Windmill version for OSUOSL
+    tag: "1.601.1"
+
+    # Disable LSP replicas for test environment
+    lspReplicas: 0
+
+  # Override PostgreSQL version
+  postgresql:
+    image:
+      tag: "14"
+
+########################################
+## Component | Knowledge Archive Database for Cooperating Config Breeders
+########################################
+archive-db:
+  # Enable archive database for test stack
+  enabled: true
+
+  # Skip disk I/O health checks for KIND environment
+  # (slow disk sync causes timeouts in KIND)
+  # This skips only the /mnt/disk write/sync probes, keeps other monitoring
+  Values:
+    Services:
+    - name: "yb-masters"
+      skipHealthChecks: true
+    - name: "yb-tservers"
+      skipHealthChecks: true
+
+########################################
+## Component | Godon Metrics Exporter
+########################################
+metrics_exporter:
+  env:
+  - name: ARCHIVE_DB_HOST
+    value: "yb-tservers.godon.svc.cluster.local:5433"
+  - name: ARCHIVE_DB_USER
+    value: "yugabyte"
+  - name: ARCHIVE_DB_PW
+    value: "yugabyte"
+  - name: ARCHIVE_DB_DATABASE_NAME
+    value: "archive_db"
