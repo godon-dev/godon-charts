@@ -106,6 +106,21 @@ windmill:
             cpu: "500m"
             memory: "512Mi"
 
+      # Default workers - handle any job without a specific tag
+      # Picks up dependency resolution, untagged scripts, and general operations
+      - name: "default"
+        replicas: 2
+        extraEnv:
+        - name: WORKER_GROUP
+          value: "default"
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+
 ########################################
 ## Component | Godon Metrics Exporter
 ########################################
