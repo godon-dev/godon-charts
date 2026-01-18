@@ -5,12 +5,12 @@
 ########################################
 godon_seeder:
   image:
-    tag: "0.0.18"
+    tag: "0.0.19"
   env:
   - name: CONTROLLER_VERSION
-    value: "0.20.0"
+    value: "0.21.0"
   - name: BREEDER_VERSION
-    value: "0.14.0"
+    value: "0.15.0"
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
 
@@ -77,10 +77,39 @@ windmill:
           limits:
             cpu: "500m"
             memory: "512Mi"
+
+      # Default workers - handle any job without a specific tag
+      # Picks up dependency resolution, untagged scripts, and general operations
+      - name: "default"
+        replicas: 2
+        extraEnv:
+        - name: WORKER_GROUP
+          value: "default"
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
   postgresql:
     image:
       repository: postgres
       tag: "14"
+
+  # Increase resources and connections for 10 concurrent workers
+  primary:
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    extendedConf:
+      max_connections: "200"
+      shared_buffers: "128MB"
+      effective_cache_size: "512MB"
 
 ########################################
 ## Component | Godon API
