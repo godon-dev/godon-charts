@@ -301,13 +301,13 @@ archive-db:
     pullPolicy: IfNotPresent
 
   replicas:
-    master: 3
+    master: 1
     tserver: 1
 
   storage:
     ephemeral: false
     master:
-      count: 3
+      count: 1
       size: 1Gi
       storageClass: ""
     tserver:
@@ -318,11 +318,11 @@ archive-db:
   resource:
     master:
       requests:
-        cpu: "0.5"
-        memory: 512Mi
-      limits:
         cpu: "1"
         memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 2Gi
     tserver:
       requests:
         cpu: "0.2"
