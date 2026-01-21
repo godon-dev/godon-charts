@@ -26,6 +26,32 @@ archive-db:
   # Enable archive database for test stack
   enabled: true
 
+  # Use hostPath storage to bypass overlayfs and improve I/O performance
+  # Data will be stored under /srv/storage/yugabytedb on KIND nodes
+  # ephemeral: true disables PVC creation - we use extraVolumes with hostPath instead
+  storage:
+    ephemeral: true
+
+  # Configure hostPath volumes via extraVolumes
+  master:
+    extraVolumes:
+      - name: datadir0
+        hostPath:
+          path: /srv/storage/yugabytedb/master
+          type: DirectoryOrCreate
+    extraVolumeMounts:
+      - name: datadir0
+        mountPath: /mnt/disk0
+  tserver:
+    extraVolumes:
+      - name: datadir0
+        hostPath:
+          path: /srv/storage/yugabytedb/tserver
+          type: DirectoryOrCreate
+    extraVolumeMounts:
+      - name: datadir0
+        mountPath: /mnt/disk0
+
   # Skip disk I/O health checks for KIND environment
   # (slow disk sync causes timeouts in KIND)
   # This skips only the /mnt/disk write/sync probes, keeps other monitoring
