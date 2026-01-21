@@ -109,7 +109,7 @@ jobs:
       run: |
         echo "🧹 Cleaning up hostPath data for YugabyteDB..."
         echo "Removing /srv/storage/yugabytedb/ directory"
-        sudo rm -rf /srv/storage/yugabytedb/
+        rm -rf /srv/storage/yugabytedb/
         echo "✅ hostPath data cleaned"
 
     - name: Show remaining resources
