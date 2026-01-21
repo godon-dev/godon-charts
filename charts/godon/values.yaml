@@ -38,9 +38,9 @@ godon_seeder:
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
   - name: CONTROLLER_VERSION
-    value: "0.21.0"
+    value: "0.24.0"
   - name: BREEDER_VERSION
-    value: "0.15.0"
+    value: "0.18.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -118,8 +118,8 @@ windmill:
             cpu: "50m"
             memory: "128Mi"
           limits:
-            cpu: "200m"
-            memory: "256Mi"
+            cpu: "500m"
+            memory: "512Mi"
 
 ########################################
 ## Component | Godon Metrics Exporter
@@ -295,6 +295,9 @@ archive-db:
 
   enabled: false
 
+  # Disable Load Balancer As Only used Internally
+  enableLoadBalancer: false
+
   image:
     repository: "docker.io/yugabytedb/yugabyte"
     tag: 2.18.1.0-b84
@@ -312,24 +315,24 @@ archive-db:
       storageClass: ""
     tserver:
       count: 1
-      size: 1Gi
+      size: 20Gi
       storageClass: ""
 
   resource:
     master:
       requests:
-        cpu: "0.2"
-        memory: 200Mi
+        cpu: "1"
+        memory: 1Gi
       limits:
-        cpu: "0.5"
-        memory: 500Mi
+        cpu: "2"
+        memory: 2Gi
     tserver:
       requests:
         cpu: "0.2"
         memory: 200Mi
       limits:
-        cpu: "0.5"
-        memory: 500Mi
+        cpu: "2"
+        memory: 2Gi
 
   master:
     extraEnv:
