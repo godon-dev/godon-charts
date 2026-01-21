@@ -40,7 +40,7 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.23.0"
   - name: BREEDER_VERSION
-    value: "0.17.0"
+    value: "0.18.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -294,6 +294,9 @@ metadata-db:
 archive-db:
 
   enabled: false
+
+  # Disable Load Balancer As Only used Internally
+  enableLoadBalancer: false
 
   image:
     repository: "docker.io/yugabytedb/yugabyte"

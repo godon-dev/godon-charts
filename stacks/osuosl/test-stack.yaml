@@ -29,12 +29,30 @@ archive-db:
   # Skip disk I/O health checks for KIND environment
   # (slow disk sync causes timeouts in KIND)
   # This skips only the /mnt/disk write/sync probes, keeps other monitoring
-  Values:
-    Services:
+  Services:
     - name: "yb-masters"
+      label: "yb-master"
       skipHealthChecks: true
+      memory_limit_to_ram_ratio: 0.85
+      ports:
+        http-ui: "7000"
+        tcp-rpc-port: "7100"
+        yugabyted-ui: "15433"
     - name: "yb-tservers"
+      label: "yb-tserver"
       skipHealthChecks: true
+      memory_limit_to_ram_ratio: 0.85
+      ports:
+        http-ui: "9000"
+        tcp-rpc-port: "9100"
+        tcp-yql-port: "9042"
+        tcp-yedis-port: "6379"
+        tcp-ysql-port: "5433"
+        http-ycql-met: "12000"
+        http-yedis-met: "11000"
+        http-ysql-met: "13000"
+        tcp-ybc-port: "18018"
+        yugabyted-ui: "15433"
 
 ########################################
 ## Component | Godon Metrics Exporter
