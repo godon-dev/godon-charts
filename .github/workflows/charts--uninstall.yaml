@@ -108,9 +108,15 @@ jobs:
     - name: Clean up hostPath data for YugabyteDB
       run: |
         echo "🧹 Cleaning up hostPath data for YugabyteDB..."
-        echo "Removing /srv/storage/yugabytedb/ directory"
-        rm -rf /srv/storage/yugabytedb/
-        echo "✅ hostPath data cleaned"
+        echo "Removing /srv/storage/yugabytedb/ from all KIND nodes"
+
+        # Get all nodes in the cluster and clean up each one
+        for node in $(kind get nodes --name godon-1-cluster); do
+          echo "Cleaning up node: $node"
+          docker exec "$node" rm -rf /srv/storage/yugabytedb/ || true
+        done
+
+        echo "✅ hostPath data cleaned from all KIND nodes"
 
     - name: Show remaining resources
       env:
