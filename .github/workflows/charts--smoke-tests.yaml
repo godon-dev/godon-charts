@@ -647,36 +647,10 @@ jobs:
           # Create multiple breeders in succession
           echo "🔨 Creating multiple breeders..."
           for i in {1..5}; do
-            cat > breeder-stress-config-${i}.yaml << EOF
-          meta:
-            configVersion: "0.2"
-          breeder:
-            type: "linux_performance"
-          settings:
-            sysctl:
-              vm.swappiness:
-                constraints:
-                  - step: 1
-                    lower: 1
-                    upper: 100
-          objectives:
-            - name: "test_metric_${i}"
-              direction: minimize
-              reconnaissance:
-                service: prometheus
-                query: "scalar(test_metric_${i})"
-                stabilization_seconds: 1
-                samples: 1
-                interval: 1
-          effectuation:
-            targets:
-              - type: "ssh"
-                id: "test_target_${i}"
-                address: "10.0.5.${i}"
-                username: "test_user"
-                credentialName: "test_credential_${i}"
-          EOF
+            # Download the current example config for each stress test breeder
+            curl -s https://raw.githubusercontent.com/godon-dev/godon/refs/heads/master/examples/network.yml -o breeder-stress-config-${i}.yaml
 
+            # Fix file permissions so container can read it
             chmod 644 breeder-stress-config-${i}.yaml
 
             docker run --rm --network host \
