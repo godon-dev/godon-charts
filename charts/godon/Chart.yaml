@@ -1,7 +1,7 @@
 apiVersion: v2
 description: Helm Chart for godon optimizer stack
 name: godon
-version: 0.2.10
+version: 0.2.11
 appVersion: 0.0.6
 home: https://github.com/cherusk/godon-charts/godon
 maintainers:

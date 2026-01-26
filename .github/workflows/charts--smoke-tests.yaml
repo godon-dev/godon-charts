@@ -315,9 +315,9 @@ jobs:
             breeder update --file=/update-config.yaml || echo "⚠️  Breeder update not implemented or failed"
 
           # Test 6: Delete breeder
-          echo "🗑️  BREEDER PURGE - Deleting breeder:"
+          echo "🗑️  BREEDER PURGE - Deleting breeder (with force flag):"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="${BREEDER_UUID}" || echo "⚠️  Breeder purge failed"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --force --id="${BREEDER_UUID}" || echo "⚠️  Breeder purge failed"
 
           # Test 7: List breeders after deletion
           echo "📋 BREEDER LIST - After deletion:"
