@@ -40,7 +40,7 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.28.0"
   - name: BREEDER_VERSION
-    value: "0.20.0"
+    value: "0.21.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
