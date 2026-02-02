@@ -1,7 +1,7 @@
 apiVersion: v2
 description: Helm Chart for godon optimizer stack
 name: godon
-version: 0.2.11
+version: 0.2.12
 appVersion: 0.0.6
 home: https://github.com/cherusk/godon-charts/godon
 maintainers:
@@ -23,7 +23,7 @@ keywords:
   - cooperative-metaheuristics
 dependencies:
   - name: windmill
-    version: 4.0.23
+    version: 4.0.61
     repository: https://windmill-labs.github.io/windmill-helm-charts
     alias: windmill
   - name: postgresql
