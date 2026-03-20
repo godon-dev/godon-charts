@@ -49,7 +49,25 @@ loki:
       - name: loki-storage
         mountPath: /var/loki
 
+  # Disable other deployment modes
+  backend:
+    replicas: 0
+  read:
+    replicas: 0
+  write:
+    replicas: 0
+
   persistence:
+    enabled: false
+
+  test:
+    enabled: false
+  monitoring:
+    selfMonitoring:
+      enabled: false
+      grafanaAgent:
+        install: false
+  gateway:
     enabled: false
 
 ########################################
