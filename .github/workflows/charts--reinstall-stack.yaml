@@ -66,10 +66,13 @@ jobs:
           sleep 5
           
           # Clean up hostPath data
-          echo "🧹 Cleaning up hostPath data..."
-          rm -rf /srv/storage/yugabytedb/
-          rm -rf /srv/storage/loki/
-          rm -rf /srv/storage/grafana/
+          echo "🧹 Cleaning up hostPath data from KIND nodes..."
+          for node in $(kind get nodes --name godon-1-cluster); do
+            echo "Cleaning up node: $node"
+            docker exec "$node" rm -rf /srv/storage/yugabytedb/ || true
+            docker exec "$node" rm -rf /srv/storage/loki/ || true
+            docker exec "$node" rm -rf /srv/storage/grafana/ || true
+          done
           echo "✅ hostPath data cleaned"
           
           echo "✅ Cleanup complete"
