@@ -1,0 +1,95 @@
+---
+namespace:
+  create: true
+  name: godon-observability
+
+########################################
+## Component | Loki (Log Storage)
+########################################
+loki:
+  enabled: true
+
+  deploymentMode: SingleBinary
+
+  loki:
+    auth_enabled: false
+    commonConfig:
+      replication_factor: 1
+    storage:
+      type: filesystem
+    schemaConfig:
+      configs:
+        - from: 2024-01-01
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: loki_index_
+            period: 24h
+    limits_config:
+      retention_period: 168h
+      max_query_length: 721h
+      max_query_parallelism: 32
+
+  singleBinary:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    extraVolumes:
+      - name: loki-storage
+        hostPath:
+          path: /srv/storage/loki
+          type: DirectoryOrCreate
+    extraVolumeMounts:
+      - name: loki-storage
+        mountPath: /var/loki
+
+  persistence:
+    enabled: false
+
+########################################
+## Component | Grafana (Visualization)
+########################################
+grafana:
+  enabled: true
+
+  adminPassword: admin
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  persistence:
+    enabled: false
+
+  extraVolumes:
+    - name: grafana-storage
+      hostPath:
+        path: /srv/storage/grafana
+        type: DirectoryOrCreate
+  extraVolumeMounts:
+    - name: grafana-storage
+      mountPath: /var/lib/grafana
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Loki
+          type: loki
+          url: http://loki.godon-observability.svc.cluster.local:3100
+          access: proxy
+          isDefault: true

@@ -38,56 +38,60 @@ jobs:
         env:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
-          echo "🧹 Cleaning up former Godon deployment (including databases)"
-          helm uninstall godon \
-               --wait --ignore-not-found \
-               --namespace godon
-
-          echo "⏳ Waiting for all godon resources to be deleted..."
+          echo "🧹 Cleaning up former deployments..."
+          helm uninstall godon --wait --ignore-not-found --namespace godon
+          helm uninstall godon-observability --wait --ignore-not-found --namespace godon-observability
+          
+          echo "⏳ Waiting for all resources to be deleted..."
           kubectl wait --for=delete pod,job,deployment -l app.kubernetes.io/instance=godon -n godon --timeout=60s || true
-
-          # Double-check jobs are gone (some might not have the label)
+          kubectl wait --for=delete pod,job,deployment -l app.kubernetes.io/instance=godon-observability -n godon-observability --timeout=60s || true
+          
+          # Double-check jobs are gone
           echo "🔍 Verifying no jobs remain..."
           sleep 3
           REMAINING_JOBS=$(kubectl -n godon get jobs -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
-          if [ -n "$REMAINING_JOBS" ]; then
-            echo "⚠️ Found remaining jobs: $REMAINING_JOBS"
+          REMAINING_OBS_JOBS=$(kubectl -n godon-observability get jobs -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+          if [ -n "$REMAINING_JOBS" ] || [ -n "$REMAINING_OBS_JOBS" ]; then
+            echo "⚠️ Found remaining jobs"
             echo "🗑️ Force deleting all jobs..."
             kubectl -n godon delete jobs --all --force --grace-period=0 || true
+            kubectl -n godon-observability delete jobs --all --force --grace-period=0 || true
             sleep 2
           fi
-
-          # Delete ALL PVCs including Windmill's to fix database corruption issues
-          echo "🗑️ Deleting ALL persistent volumes for truly clean slate..."
-          echo "This includes Windmill database PVCs to fix schema violations"
+          
+          # Delete all PVCs
+          echo "🗑️ Deleting ALL persistent volumes..."
           kubectl -n godon delete pvc --all --force --grace-period=0 || true
+          kubectl -n godon-observability delete pvc --all --force --grace-period=0 || true
           sleep 5
-
-          # Double-check all PVCs are gone
-          REMAINING_PVCS=$(kubectl -n godon get pvc --no-headers 2>/dev/null | wc -l)
-          if [ "$REMAINING_PVCS" -gt 0 ]; then
-            echo "⚠️ Found $REMAINING_PVCS remaining PVCs, force deleting again..."
-            kubectl -n godon delete pvc --all --force --grace-period=0 --timeout=10s || true
-            sleep 3
-          fi
-
-          # Clean up hostPath data for YugabyteDB
-          echo "🧹 Cleaning up hostPath data for YugabyteDB..."
-          echo "Removing /srv/storage/yugabytedb/ directory"
+          
+          # Clean up hostPath data
+          echo "🧹 Cleaning up hostPath data..."
           rm -rf /srv/storage/yugabytedb/
+          rm -rf /srv/storage/loki/
+          rm -rf /srv/storage/grafana/
           echo "✅ hostPath data cleaned"
-
+          
           echo "✅ Cleanup complete"
 
-      - name: Deploy Fresh Godon Stack
+      - name: Deploy Observability Stack
         env:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
-          echo "🚀 Deploying fresh Godon stack (clean state)"
-          # Deploy without waiting for Helm's internal readiness detection (KIND compatibility)
+          echo "🚀 Deploying observability stack..."
+          helm install godon-observability ./charts/godon-observability/ \
+               --dependency-update \
+               --namespace godon-observability \
+               --wait=false --timeout 5m
+
+      - name: Deploy Godon Stack
+        env:
+          KUBECONFIG: /tmp/kind_kubeconfig.yaml
+        run: |
+          echo "🚀 Deploying Godon stack..."
           helm install godon ./charts/godon/ \
                --dependency-update \
-               --create-namespace --namespace godon \
+               --namespace godon \
                --values ./stacks/osuosl/test-stack.yaml \
                --wait=false --timeout 5m
 
@@ -95,25 +99,26 @@ jobs:
         env:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
-          echo "⏳ Waiting for Godon stack to become ready..."
-          # Verify readiness with kubectl (more reliable in KIND than Helm wait)
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=godon -n godon --timeout=10m
-          echo "✅ All Godon pods are ready!"
+          echo "⏳ Waiting for stacks to become ready..."
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=godon-observability -n godon-observability --timeout=10m || true
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=godon -n godon --timeout=10m || true
+          echo "✅ All pods ready!"
 
       - name: Deployment Status Report
         env:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
-          echo "📊 Fresh Godon Stack Status"
+          echo "📊 Deployment Status"
           echo "=============================="
-          helm status godon \
-               --namespace godon \
-               --show-resources
-
           echo ""
-          echo "🏥 Pod Status"
+          echo "Observability Stack:"
+          helm status godon-observability --namespace godon-observability --show-resources || true
+          echo ""
+          kubectl get pods -n godon-observability
+          echo ""
+          echo "Godon Stack:"
+          helm status godon --namespace godon --show-resources || true
+          echo ""
           kubectl get pods -n godon
-
           echo ""
           echo "✅ Clean slate deployment complete"
-

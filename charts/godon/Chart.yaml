@@ -39,3 +39,7 @@ dependencies:
     version: 2.14.0
     repository: https://prometheus-community.github.io/helm-charts
     condition: pushgateway.enabled
+  - name: alloy
+    version: 0.11.0
+    repository: https://grafana.github.io/helm-charts
+    condition: alloy.enabled

@@ -351,3 +351,49 @@ archive-db:
       database: archive_db
 
   dnsPolicy: ClusterFirst
+
+########################################
+## Component | Grafana Alloy (Log Collection)
+########################################
+alloy:
+  enabled: false
+
+  loki:
+    endpoint: "http://loki.godon-observability.svc.cluster.local:3100/loki/api/v1/push"
+
+  extraEnv:
+    - name: GOMAXPROCS
+      value: "2"
+    - name: GOMEMLIMIT
+      value: "512MiB"
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+
+  alloy:
+    configMap:
+      content: |
+        loki.write "default" {
+          endpoint {
+             url = "http://loki.godon-observability.svc.cluster.local:3100/loki/api/v1/push"
+          }
+        }
+
+        loki.source.api "receiver" {
+          http {
+            listen_address = "0.0.0.0"
+            listen_port = 3500
+          }
+
+          forward_to = [loki.write.default.receiver]
+        }
