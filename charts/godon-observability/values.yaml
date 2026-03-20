@@ -1,6 +1,6 @@
 ---
 namespace:
-  create: true
+  create: false
   name: godon-observability
 
 ########################################
@@ -49,7 +49,23 @@ loki:
       - name: loki-storage
         mountPath: /var/loki
 
+  backend:
+    replicas: 0
+  read:
+    replicas: 0
+  write:
+    replicas: 0
+
   persistence:
+    enabled: false
+  test:
+    enabled: false
+  monitoring:
+    selfMonitoring:
+      enabled: false
+      grafanaAgent:
+        install: false
+  gateway:
     enabled: false
 
 ########################################
@@ -70,15 +86,6 @@ grafana:
 
   persistence:
     enabled: false
-
-  extraVolumes:
-    - name: grafana-storage
-      hostPath:
-        path: /srv/storage/grafana
-        type: DirectoryOrCreate
-  extraVolumeMounts:
-    - name: grafana-storage
-      mountPath: /var/lib/grafana
 
   service:
     type: ClusterIP

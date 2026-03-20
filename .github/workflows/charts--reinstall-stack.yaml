@@ -39,8 +39,8 @@ jobs:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
           echo "🧹 Cleaning up former deployments..."
-          helm uninstall godon --wait --ignore-not-found --namespace godon
-          helm uninstall godon-observability --wait --ignore-not-found --namespace godon-observability
+          helm uninstall godon --wait --ignore-not-found --namespace godon || true
+          helm uninstall godon-observability --wait --ignore-not-found --namespace godon-observability || true
           
           echo "⏳ Waiting for all resources to be deleted..."
           kubectl wait --for=delete pod,job,deployment -l app.kubernetes.io/instance=godon -n godon --timeout=60s || true
@@ -66,10 +66,13 @@ jobs:
           sleep 5
           
           # Clean up hostPath data
-          echo "🧹 Cleaning up hostPath data..."
-          rm -rf /srv/storage/yugabytedb/
-          rm -rf /srv/storage/loki/
-          rm -rf /srv/storage/grafana/
+          echo "🧹 Cleaning up hostPath data from KIND nodes..."
+          for node in $(kind get nodes --name godon-1-cluster); do
+            echo "Cleaning up node: $node"
+            docker exec "$node" rm -rf /srv/storage/yugabytedb/ || true
+            docker exec "$node" rm -rf /srv/storage/loki/ || true
+            docker exec "$node" rm -rf /srv/storage/grafana/ || true
+          done
           echo "✅ hostPath data cleaned"
           
           echo "✅ Cleanup complete"
@@ -81,7 +84,7 @@ jobs:
           echo "🚀 Deploying observability stack..."
           helm install godon-observability ./charts/godon-observability/ \
                --dependency-update \
-               --namespace godon-observability \
+               --create-namespace --namespace godon-observability \
                --wait=false --timeout 5m
 
       - name: Deploy Godon Stack
