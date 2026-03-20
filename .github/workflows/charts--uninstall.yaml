@@ -90,13 +90,13 @@ jobs:
         echo "✅ All PVCs deleted"
     - name: Clean up hostPath data
       run: |
-        echo "🧹 Cleaning up hostPath data..."
-        echo "Removing /srv/storage/yugabytedb"
-        rm -rf /srv/storage/yugabytedb
-        echo "Removing /srv/storage/loki"
-        rm -rf /srv/storage/loki
-        echo "Removing /srv/storage/grafana"
-        rm -rf /srv/storage/grafana
+        echo "🧹 Cleaning up hostPath data from KIND nodes..."
+        for node in $(kind get nodes --name godon-1-cluster); do
+          echo "Cleaning up node: $node"
+          docker exec "$node" rm -rf /srv/storage/yugabytedb/ || true
+          docker exec "$node" rm -rf /srv/storage/loki/ || true
+          docker exec "$node" rm -rf /srv/storage/grafana/ || true
+        done
         echo "✅ hostPath data cleaned"
     - name: Clean up namespaces (if requested)
       if: github.event.inputs.keep_namespace != 'true'
