@@ -84,7 +84,7 @@ jobs:
           echo "🚀 Deploying observability stack..."
           helm install godon-observability ./charts/godon-observability/ \
                --dependency-update \
-               --namespace godon-observability \
+               --create-namespace --namespace godon-observability \
                --wait=false --timeout 5m
 
       - name: Deploy Godon Stack
