@@ -39,8 +39,8 @@ jobs:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
           echo "🧹 Cleaning up former deployments..."
-          helm uninstall godon --wait --ignore-not-found --namespace godon
-          helm uninstall godon-observability --wait --ignore-not-found --namespace godon-observability
+          helm uninstall godon --wait --ignore-not-found --namespace godon || true
+          helm uninstall godon-observability --wait --ignore-not-found --namespace godon-observability || true
           
           echo "⏳ Waiting for all resources to be deleted..."
           kubectl wait --for=delete pod,job,deployment -l app.kubernetes.io/instance=godon -n godon --timeout=60s || true
