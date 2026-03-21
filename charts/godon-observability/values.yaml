@@ -59,6 +59,8 @@ loki:
         install: false
   gateway:
     enabled: false
+  canary:
+    enabled: false
 
 ########################################
 ## Component | Grafana (Visualization)
