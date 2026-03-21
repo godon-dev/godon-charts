@@ -94,3 +94,21 @@ grafana:
           url: http://godon-observability-loki.godon-observability.svc.cluster.local:3100
           access: proxy
           isDefault: true
+
+########################################
+## Component | Promtail (Log Collector)
+########################################
+promtail:
+  enabled: true
+
+  config:
+    clients:
+      - url: http://godon-observability-loki.godon-observability.svc.cluster.local:3100/loki/api/v1/push
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
