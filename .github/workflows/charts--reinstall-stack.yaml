@@ -63,6 +63,10 @@ jobs:
           echo "🗑️ Deleting ALL persistent volumes..."
           kubectl -n godon delete pvc --all --force --grace-period=0 || true
           kubectl -n godon-observability delete pvc --all --force --grace-period=0 || true
+          
+          # Delete secrets to avoid password conflicts
+          echo "🗑️ Deleting secrets..."
+          kubectl -n godon-observability delete secret --all || true
           sleep 5
           
           # Clean up hostPath data

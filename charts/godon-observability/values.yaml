@@ -4,63 +4,43 @@ namespace:
   name: godon-observability
 
 ########################################
-## Component | Loki (Log Storage)
+## Component | ClickHouse (Log Storage)
 ########################################
-loki:
+clickhouse:
   enabled: true
 
-  deploymentMode: SingleBinary
+  auth:
+    username: default
+    password: ""
 
-  loki:
-    auth_enabled: false
-    commonConfig:
-      replication_factor: 1
-    storage:
-      type: filesystem
-    schemaConfig:
-      configs:
-        - from: 2024-01-01
-          store: tsdb
-          object_store: filesystem
-          schema: v13
-          index:
-            prefix: loki_index_
-            period: 24h
-    limits_config:
-      retention_period: 168h
-      max_query_length: 721h
-      max_query_parallelism: 32
-
-  singleBinary:
-    replicas: 1
-    resources:
-      requests:
-        cpu: 100m
-        memory: 256Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
-
-  backend:
-    replicas: 0
-  read:
-    replicas: 0
-  write:
-    replicas: 0
+  shards: 1
+  replicaCount: 1
 
   persistence:
     enabled: false
-  test:
-    enabled: false
-  monitoring:
-    selfMonitoring:
-      enabled: false
-      grafanaAgent:
-        install: false
-  gateway:
-    enabled: false
-  canary:
-    enabled: false
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  initdbScripts:
+    create-logs-table.sql: |
+      CREATE DATABASE IF NOT EXISTS logs;
+
+      CREATE TABLE IF NOT EXISTS logs.app_logs (
+        timestamp DateTime64(6) DEFAULT now64(6),
+        level Enum8('debug'=1, 'info'=2, 'warn'=3, 'error'=4),
+        service String,
+        message String,
+        attributes String
+      ) ENGINE = MergeTree()
+      PARTITION BY toYYYYMMDD(timestamp)
+      ORDER BY (service, timestamp)
+      TTL timestamp + INTERVAL 30 DAY DELETE;
 
 ########################################
 ## Component | Grafana (Visualization)
@@ -89,26 +69,15 @@ grafana:
     datasources.yaml:
       apiVersion: 1
       datasources:
-        - name: Loki
-          type: loki
-          url: http://godon-observability-loki.godon-observability.svc.cluster.local:3100
+        - name: ClickHouse
+          type: grafana-clickhouse-datasource
+          url: http://godon-observability-clickhouse.godon-observability.svc.cluster.local:8123
           access: proxy
           isDefault: true
+          jsonData:
+            defaultDatabase: logs
+            port: 9000
+            username: default
 
-########################################
-## Component | Promtail (Log Collector)
-########################################
-promtail:
-  enabled: true
-
-  config:
-    clients:
-      - url: http://godon-observability-loki.godon-observability.svc.cluster.local:3100/loki/api/v1/push
-
-  resources:
-    requests:
-      cpu: 50m
-      memory: 64Mi
-    limits:
-      cpu: 200m
-      memory: 128Mi
+  plugins:
+    - grafana-clickhouse-datasource
