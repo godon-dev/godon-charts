@@ -70,6 +70,10 @@ grafana:
 
   adminPassword: admin
 
+  auth:
+    anonymous:
+      enabled: true
+
   resources:
     requests:
       cpu: 100m
