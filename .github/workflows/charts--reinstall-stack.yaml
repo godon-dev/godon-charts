@@ -39,33 +39,37 @@ jobs:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
           echo "🧹 Cleaning up former deployments..."
-          helm uninstall godon --wait --ignore-not-found --namespace godon || true
-          helm uninstall godon-observability --wait --ignore-not-found --namespace godon-observability || true
           
-          echo "⏳ Waiting for all resources to be deleted..."
-          kubectl wait --for=delete pod,job,deployment -l app.kubernetes.io/instance=godon -n godon --timeout=60s || true
-          kubectl wait --for=delete pod,job,deployment -l app.kubernetes.io/instance=godon-observability -n godon-observability --timeout=60s || true
+          kubectl -n godon delete statefulsets --all --ignore-not-found || true
+          kubectl -n godon-observability delete statefulsets --all --ignore-not-found || true
           
-          # Double-check jobs are gone
-          echo "🔍 Verifying no jobs remain..."
+          helm uninstall godon --ignore-not-found --namespace godon || true
+          helm uninstall godon-observability --ignore-not-found --namespace godon-observability || true
+          
           sleep 3
-          REMAINING_JOBS=$(kubectl -n godon get jobs -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
-          REMAINING_OBS_JOBS=$(kubectl -n godon-observability get jobs -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
-          if [ -n "$REMAINING_JOBS" ] || [ -n "$REMAINING_OBS_JOBS" ]; then
-            echo "⚠️ Found remaining jobs"
-            echo "🗑️ Force deleting all jobs..."
-            kubectl -n godon delete jobs --all --force --grace-period=0 || true
-            kubectl -n godon-observability delete jobs --all --force --grace-period=0 || true
-            sleep 2
-          fi
           
-          # Delete all PVCs
+          echo "🗑️ Force deleting stuck pods..."
+          kubectl -n godon delete pods --all --force --grace-period=0 || true
+          kubectl -n godon-observability delete pods --all --force --grace-period=0 || true
+          
+          for ns in godon godon-observability; do
+            for pod in $(kubectl -n "$ns" get pods -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+              kubectl -n "$ns" patch pod "$pod" --patch '{"metadata":{"finalizers":null}}' 2>/dev/null || true
+            done
+          done
+          
           echo "🗑️ Deleting ALL persistent volumes..."
           kubectl -n godon delete pvc --all --force --grace-period=0 || true
           kubectl -n godon-observability delete pvc --all --force --grace-period=0 || true
-          sleep 5
           
-          # Clean up hostPath data
+          for pvc in $(kubectl -n godon-observability get pvc -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+            kubectl -n godon-observability patch pvc "$pvc" --patch '{"metadata":{"finalizers":null}}' 2>/dev/null || true
+          done
+          
+          echo "🗑️ Deleting secrets..."
+          kubectl -n godon-observability delete secret --all || true
+          sleep 2
+          
           echo "🧹 Cleaning up hostPath data from KIND nodes..."
           for node in $(kind get nodes --name godon-1-cluster); do
             echo "Cleaning up node: $node"

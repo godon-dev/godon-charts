@@ -46,6 +46,16 @@ jobs:
                --values ./stacks/osuosl/test-stack.yaml \
                --wait=false --timeout 5m
 
+      - name: Upgrade Observability Stack
+        env:
+          KUBECONFIG: /tmp/kind_kubeconfig.yaml
+        run: |
+          echo "🔄 Upgrading Observability stack"
+          helm upgrade godon-observability ./charts/godon-observability/ \
+               --dependency-update \
+               --create-namespace --namespace godon-observability \
+               --wait=false --timeout 5m
+
       - name: Verify Upgrade Readiness
         env:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
@@ -66,6 +76,14 @@ jobs:
                --show-resources
 
           echo ""
+          echo "📊 Observability Stack Status"
+          echo "========================================"
+          helm status godon-observability \
+               --namespace godon-observability \
+               --show-resources || true
+
+          echo ""
           echo "🏥 Pod Status"
           kubectl get pods -n godon
+          kubectl get pods -n godon-observability
 
