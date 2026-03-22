@@ -13,12 +13,6 @@ clickhouse:
     username: default
     password: ""
 
-  shards: 1
-  replicaCount: 1
-
-  persistence:
-    enabled: false
-
   resources:
     requests:
       cpu: 100m
