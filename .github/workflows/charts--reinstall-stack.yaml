@@ -76,7 +76,6 @@ jobs:
             docker exec "$node" rm -rf /srv/storage/yugabytedb/ || true
             docker exec "$node" rm -rf /srv/storage/loki/ || true
             docker exec "$node" rm -rf /srv/storage/grafana/ || true
-            docker exec "$node" rm -rf /srv/storage/clickhouse/ || true
           done
           echo "✅ hostPath data cleaned"
           
