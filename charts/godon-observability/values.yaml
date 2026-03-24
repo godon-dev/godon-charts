@@ -4,6 +4,46 @@ namespace:
   name: godon-observability
 
 ########################################
+## Component | OpenTelemetry Collector
+########################################
+opentelemetry-collector:
+  enabled: true
+
+  mode: deployment
+
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    exporters:
+      loki:
+        endpoint: http://godon-observability-loki.godon-observability.svc.cluster.local:3100/loki/api/v1/push
+        default_labels_enabled:
+          exporter: false
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          exporters: [loki]
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  service:
+    type: ClusterIP
+
+########################################
 ## Component | Loki (Log Storage)
 ########################################
 loki:
