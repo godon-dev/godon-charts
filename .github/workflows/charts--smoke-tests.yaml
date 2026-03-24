@@ -75,25 +75,32 @@ jobs:
 
           # Setup port forward in background
           echo "🔧 Starting port-forward on ${LOCALHOST_ADDR}:${PORT}..."
-          kubectl port-forward -n godon --address ${LOCALHOST_ADDR} "${API_POD}" ${PORT}:8080 &
+          kubectl port-forward -n godon --address ${LOCALHOST_ADDR} "${API_POD}" ${PORT}:8080 > /tmp/pf.log 2>&1 &
           PF_PID=$!
+          
+          # Give port-forward time to establish
+          sleep 3
 
           echo "✅ Port forward started (PID: ${PF_PID})"
           echo ${PF_PID} > /tmp/pf_pid
 
-          # Wait for port forward to be ready
+          # Wait for port forward to be ready with proper counter
           echo "⏳ Waiting for port forward to be ready..."
-          for i in {1..30}; do
-            if curl -f http://${LOCALHOST_ADDR}:${PORT}/health >/dev/null 2>&1; then
+          READY=false
+          for i in $(seq 1 30); do
+            if curl -s -f --connect-timeout 2 http://${LOCALHOST_ADDR}:${PORT}/health >/dev/null 2>&1; then
               echo "✅ Port forward is ready!"
+              READY=true
               break
             fi
             echo "Attempt $i/30 - waiting for port forward..."
             sleep 2
           done
 
-          if [ $i -eq 30 ]; then
+          if [ "$READY" = false ]; then
             echo "❌ Port forward failed to become ready after 60 seconds"
+            echo "Port-forward logs:"
+            cat /tmp/pf.log
             kill ${PF_PID} || true
             exit 1
           fi
@@ -655,22 +662,6 @@ jobs:
           API_HOST="${{ env.API_HOST }}"
           API_PORT="${{ env.API_PORT }}"
           
-          # Retry helper function
-          retry_cli() {
-            local max_attempts=3
-            local delay=2
-            local attempt=1
-            while [ $attempt -le $max_attempts ]; do
-              if "$@"; then
-                return 0
-              fi
-              echo "Attempt $attempt/$max_attempts failed, retrying in ${delay}s..."
-              sleep $delay
-              attempt=$((attempt + 1))
-            done
-            return 1
-          }
-          
           # Create multiple breeders in succession
           echo "🔨 Creating multiple breeders..."
           for i in {1..5}; do
@@ -679,16 +670,31 @@ jobs:
 
             # Fix file permissions so container can read it
             chmod 644 breeder-stress-config-${i}.yaml
-
-            retry_cli docker run --rm --network host \
-              -v $(pwd):/work \
-              -w /work \
-              -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
-              -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
-              "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml || echo "⚠️  Breeder ${i} creation failed after retries"
             
-            sleep 1
+            # Verify API is reachable before each request
+            echo "Testing API connectivity..."
+            if ! curl -f http://${API_HOST}:${API_PORT}/health >/dev/null 2>&1; then
+              echo "⚠️  API not reachable, waiting..."
+              sleep 3
+            fi
+
+            for attempt in 1 2 3; do
+              if docker run --rm --network host \
+                -v $(pwd):/work \
+                -w /work \
+                -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
+                -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
+                "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+                breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml; then
+                echo "✅ Breeder ${i} created"
+                break
+              else
+                echo "Attempt ${attempt}/3 failed, retrying in 3s..."
+                sleep 3
+              fi
+            done || echo "⚠️  Breeder ${i} creation failed after retries"
+            
+            sleep 2
           done
           
           # List all breeders to verify
@@ -712,15 +718,23 @@ jobs:
 
             chmod 644 credential-stress-config-${i}.yaml
 
-            retry_cli docker run --rm --network host \
-              -v $(pwd):/work \
-              -w /work \
-              -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
-              -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
-              "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              credential create --file=credential-stress-config-${i}.yaml || echo "⚠️  Credential ${i} creation failed after retries"
+            for attempt in 1 2 3; do
+              if docker run --rm --network host \
+                -v $(pwd):/work \
+                -w /work \
+                -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
+                -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
+                "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+                credential create --file=credential-stress-config-${i}.yaml; then
+                echo "✅ Credential ${i} created"
+                break
+              else
+                echo "Attempt ${attempt}/3 failed, retrying in 3s..."
+                sleep 3
+              fi
+            done || echo "⚠️  Credential ${i} creation failed after retries"
             
-            sleep 1
+            sleep 2
           done
           
           # List all credentials to verify
