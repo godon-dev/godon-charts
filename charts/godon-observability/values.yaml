@@ -33,6 +33,14 @@ loki:
 
   singleBinary:
     replicas: 1
+    extraVolumes:
+      - name: loki-storage
+        hostPath:
+          path: /srv/storage/loki
+          type: DirectoryOrCreate
+    extraVolumeMounts:
+      - name: loki-storage
+        mountPath: /var/loki
     resources:
       requests:
         cpu: 100m
@@ -85,6 +93,15 @@ grafana:
   persistence:
     enabled: false
 
+  extraVolumes:
+    - name: grafana-storage
+      hostPath:
+        path: /srv/storage/grafana
+        type: DirectoryOrCreate
+  extraVolumeMounts:
+    - name: grafana-storage
+      mountPath: /var/lib/grafana
+
   service:
     type: ClusterIP
     port: 80
@@ -108,6 +125,11 @@ promtail:
   config:
     clients:
       - url: http://godon-observability-loki.godon-observability.svc.cluster.local:3100/loki/api/v1/push
+    snippets:
+      pipelineStages:
+        - match:
+            selector: '{component=~"api|metrics-exporter|seeder"}'
+            action: keep
 
   resources:
     requests:
