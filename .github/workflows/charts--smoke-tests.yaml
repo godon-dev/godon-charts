@@ -258,10 +258,19 @@ jobs:
             echo "${BREEDER_UUID}" > /tmp/breeder_uuid
           fi
 
-          # Test 3: List breeders after creation
+          # Test 3: List breeders after creation and extract UUID
           echo "📋 BREEDER LIST - After creation:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "⚠️  Breeder list failed"
+          LIST_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list 2>&1 || echo "")
+          echo "${LIST_OUTPUT}"
+          
+          # Extract UUID from list output (more reliable than create output)
+          if [ -z "${BREEDER_UUID}" ] || [ "${BREEDER_UUID}" = "550e8400-e29b-41d4-a716-446655440000" ]; then
+            BREEDER_UUID=$(echo "${LIST_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
+            if [ -n "${BREEDER_UUID}" ]; then
+              echo "✅ Extracted breeder UUID from list: ${BREEDER_UUID}"
+            fi
+          fi
 
           # Test 4: Get specific breeder
           echo "🔍 BREEDER SHOW - Getting specific breeder:"
@@ -271,8 +280,8 @@ jobs:
           # Test 5: Update breeder (if implemented)
           echo "🔧 BREEDER UPDATE - Updating breeder:"
 
-          # Create test breeder update config
-          cat > /tmp/breeder-update-config.yaml << 'EOF'
+          # Create test breeder update config in working directory
+          cat > breeder-update-config.yaml << 'EOF'
           uuid: "PLACEHOLDER_UUID"
           name: "updated-smoke-test-breeder"
           description: "Updated smoke test breeder"
@@ -307,12 +316,14 @@ jobs:
           EOF
 
           # Update config with actual UUID
-          sed "s/PLACEHOLDER_UUID/${BREEDER_UUID}/" /tmp/breeder-update-config.yaml > /tmp/breeder-update-config-final.yaml
+          sed "s/PLACEHOLDER_UUID/${BREEDER_UUID}/" breeder-update-config.yaml > breeder-update-config-final.yaml
+          chmod 644 breeder-update-config-final.yaml
 
           docker run --rm --network host \
-            -v /tmp:/tmp:ro \
+            -v $(pwd):/work \
+            -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder update --file=/tmp/breeder-update-config-final.yaml || echo "⚠️  Breeder update not implemented or failed"
+            breeder update --file=breeder-update-config-final.yaml || echo "⚠️  Breeder update not implemented or failed"
 
           # Test 6: Delete breeder
           echo "🗑️  BREEDER PURGE - Deleting breeder (with force flag):"
@@ -644,6 +655,22 @@ jobs:
           API_HOST="${{ env.API_HOST }}"
           API_PORT="${{ env.API_PORT }}"
           
+          # Retry helper function
+          retry_cli() {
+            local max_attempts=3
+            local delay=2
+            local attempt=1
+            while [ $attempt -le $max_attempts ]; do
+              if "$@"; then
+                return 0
+              fi
+              echo "Attempt $attempt/$max_attempts failed, retrying in ${delay}s..."
+              sleep $delay
+              attempt=$((attempt + 1))
+            done
+            return 1
+          }
+          
           # Create multiple breeders in succession
           echo "🔨 Creating multiple breeders..."
           for i in {1..5}; do
@@ -653,16 +680,20 @@ jobs:
             # Fix file permissions so container can read it
             chmod 644 breeder-stress-config-${i}.yaml
 
-            docker run --rm --network host \
+            retry_cli docker run --rm --network host \
               -v $(pwd):/work \
               -w /work \
+              -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
+              -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
               "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml || echo "⚠️  Breeder ${i} creation failed"
+              breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml || echo "⚠️  Breeder ${i} creation failed after retries"
+            
+            sleep 1
           done
           
           # List all breeders to verify
           echo "📋 Listing all breeders after stress test:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+          retry_cli docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "⚠️  Breeder list failed"
           
           # Create multiple credentials in succession
@@ -681,16 +712,20 @@ jobs:
 
             chmod 644 credential-stress-config-${i}.yaml
 
-            docker run --rm --network host \
+            retry_cli docker run --rm --network host \
               -v $(pwd):/work \
               -w /work \
+              -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
+              -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
               "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              credential create --file=credential-stress-config-${i}.yaml || echo "⚠️  Credential ${i} creation failed"
+              credential create --file=credential-stress-config-${i}.yaml || echo "⚠️  Credential ${i} creation failed after retries"
+            
+            sleep 1
           done
           
           # List all credentials to verify
           echo "📋 Listing all credentials after stress test:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+          retry_cli docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure credential list || echo "⚠️  Credential list failed"
           
           echo "✅ Integration stress test completed"
