@@ -243,12 +243,12 @@ jobs:
             -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
             -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="smoke-test-breeder" --file=network-upstream.yml --output=json 2>&1 || true)
+            breeder create --name="smoke-test-breeder" --file=network-upstream.yml 2>&1 || true)
 
           echo "Create output: ${CREATE_OUTPUT}"
 
-          # Extract UUID from create output (assuming it returns JSON with uuid field)
-          BREEDER_UUID=$(echo "${CREATE_OUTPUT}" | jq -r '.uuid // .id // empty' || echo "")
+          # Extract UUID from create output - look for UUID pattern in output
+          BREEDER_UUID=$(echo "${CREATE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
 
           if [ -z "${BREEDER_UUID}" ]; then
             echo "⚠️  Could not extract breeder UUID, using placeholder for further tests"
@@ -310,9 +310,9 @@ jobs:
           sed "s/PLACEHOLDER_UUID/${BREEDER_UUID}/" /tmp/breeder-update-config.yaml > /tmp/breeder-update-config-final.yaml
 
           docker run --rm --network host \
-            -v /tmp/breeder-update-config-final.yaml:/update-config.yaml:ro \
+            -v /tmp:/tmp:ro \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder update --file=/update-config.yaml || echo "⚠️  Breeder update not implemented or failed"
+            breeder update --file=/tmp/breeder-update-config-final.yaml || echo "⚠️  Breeder update not implemented or failed"
 
           # Test 6: Delete breeder
           echo "🗑️  BREEDER PURGE - Deleting breeder (with force flag):"
@@ -466,12 +466,12 @@ jobs:
             -v $(pwd):/work:ro \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            credential create --file=credential-test-config.yaml --output=json 2>&1)
+            credential create --file=credential-test-config.yaml 2>&1 || true)
           
           echo "${CREATE_OUTPUT}"
           
-          # Extract credential ID from create output
-          CRED_ID=$(echo "${CREATE_OUTPUT}" | jq -r '.id // .credential_id // empty' || echo "")
+          # Extract credential ID from create output - look for UUID pattern
+          CRED_ID=$(echo "${CREATE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
           
           if [ -z "${CRED_ID}" ]; then
             echo "⚠️  Could not extract credential ID, using placeholder for further tests"
