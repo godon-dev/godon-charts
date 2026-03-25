@@ -144,7 +144,7 @@ grafana:
     - name: grafana-storage
       mountPath: /data/grafana
 
-  initContainers:
+  extraInitContainers:
     - name: init-chmod
       image: busybox:latest
       command: ['sh', '-c', 'mkdir -p /data/grafana && chmod 777 /data/grafana']
