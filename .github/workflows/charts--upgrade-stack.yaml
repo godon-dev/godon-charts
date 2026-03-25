@@ -34,6 +34,16 @@ jobs:
           # Verify connectivity
           kubectl cluster-info --kubeconfig=/tmp/kind_kubeconfig.yaml
 
+      - name: Prepare HostPath Directories
+        run: |
+          echo "📁 Ensuring hostPath directories have correct permissions..."
+          for node in $(kind get nodes --name godon-1-cluster); do
+            echo "Checking directories on node: $node"
+            docker exec "$node" mkdir -p /srv/storage/grafana
+            docker exec "$node" chmod 777 /srv/storage/grafana
+          done
+          echo "✅ HostPath directories ready"
+
       - name: Upgrade Godon Stack
         env:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
