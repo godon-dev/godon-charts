@@ -27,8 +27,6 @@ opentelemetry-collector:
     exporters:
       otlphttp:
         endpoint: http://godon-observability-loki.godon-observability.svc.cluster.local:3100/otlp
-        default_labels_enabled:
-          exporter: false
 
     service:
       pipelines:
@@ -146,10 +144,16 @@ grafana:
     - name: grafana-storage
       mountPath: /data/grafana
 
+  initContainers:
+    - name: init-chmod
+      image: busybox:latest
+      command: ['sh', '-c', 'mkdir -p /data/grafana && chmod 777 /data/grafana']
+      volumeMounts:
+        - name: grafana-storage
+          mountPath: /data/grafana
+
   securityContext:
-    runAsUser: 0
-    runAsGroup: 0
-    fsGroup: 0
+    fsGroup: 472
 
   env:
     GF_PATHS_DATA: /data/grafana
