@@ -13,6 +13,7 @@ opentelemetry-collector:
 
   image:
     repository: otel/opentelemetry-collector-k8s
+    tag: "0.117.0"
 
   config:
     receivers:
@@ -143,7 +144,11 @@ grafana:
         type: DirectoryOrCreate
   extraVolumeMounts:
     - name: grafana-storage
-      mountPath: /var/lib/grafana
+      mountPath: /data/grafana
+
+  env:
+    GF_PATHS_DATA: /data/grafana
+    GF_PATHS_PLUGINS: /data/grafana/plugins
 
   service:
     type: ClusterIP
