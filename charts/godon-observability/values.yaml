@@ -25,8 +25,8 @@ opentelemetry-collector:
             endpoint: 0.0.0.0:4318
 
     exporters:
-      loki:
-        endpoint: http://godon-observability-loki.godon-observability.svc.cluster.local:3100/loki/api/v1/push
+      otlphttp:
+        endpoint: http://godon-observability-loki.godon-observability.svc.cluster.local:3100/otlp
         default_labels_enabled:
           exporter: false
 
@@ -34,7 +34,7 @@ opentelemetry-collector:
       pipelines:
         logs:
           receivers: [otlp]
-          exporters: [loki]
+          exporters: [otlphttp]
 
   resources:
     requests:
@@ -146,6 +146,11 @@ grafana:
     - name: grafana-storage
       mountPath: /data/grafana
 
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    fsGroup: 0
+
   env:
     GF_PATHS_DATA: /data/grafana
     GF_PATHS_PLUGINS: /data/grafana/plugins
@@ -178,6 +183,8 @@ promtail:
         - match:
             selector: '{component=~"api|metrics-exporter|seeder"}'
             action: keep
+            stages:
+              - {}
 
   resources:
     requests:
