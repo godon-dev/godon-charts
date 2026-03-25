@@ -81,6 +81,16 @@ jobs:
           
           echo "✅ Cleanup complete"
 
+      - name: Prepare HostPath Directories
+        run: |
+          echo "📁 Preparing hostPath directories with correct permissions..."
+          for node in $(kind get nodes --name godon-1-cluster); do
+            echo "Setting up directories on node: $node"
+            docker exec "$node" mkdir -p /srv/storage/grafana
+            docker exec "$node" chmod 777 /srv/storage/grafana
+          done
+          echo "✅ HostPath directories prepared"
+
       - name: Deploy Observability Stack
         env:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
