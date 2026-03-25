@@ -4,6 +4,50 @@ namespace:
   name: godon-observability
 
 ########################################
+## Component | OpenTelemetry Collector
+########################################
+opentelemetry-collector:
+  enabled: true
+
+  mode: deployment
+
+  image:
+    repository: otel/opentelemetry-collector-k8s
+    tag: "0.117.0"
+
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    exporters:
+      loki:
+        endpoint: http://godon-observability-loki.godon-observability.svc.cluster.local:3100/loki/api/v1/push
+        default_labels_enabled:
+          exporter: false
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          exporters: [loki]
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  service:
+    type: ClusterIP
+
+########################################
 ## Component | Loki (Log Storage)
 ########################################
 loki:
@@ -33,6 +77,14 @@ loki:
 
   singleBinary:
     replicas: 1
+    extraVolumes:
+      - name: loki-storage
+        hostPath:
+          path: /srv/storage/loki
+          type: DirectoryOrCreate
+    extraVolumeMounts:
+      - name: loki-storage
+        mountPath: /var/loki
     resources:
       requests:
         cpu: 100m
@@ -85,6 +137,19 @@ grafana:
   persistence:
     enabled: false
 
+  extraVolumes:
+    - name: grafana-storage
+      hostPath:
+        path: /srv/storage/grafana
+        type: DirectoryOrCreate
+  extraVolumeMounts:
+    - name: grafana-storage
+      mountPath: /data/grafana
+
+  env:
+    GF_PATHS_DATA: /data/grafana
+    GF_PATHS_PLUGINS: /data/grafana/plugins
+
   service:
     type: ClusterIP
     port: 80
@@ -108,6 +173,11 @@ promtail:
   config:
     clients:
       - url: http://godon-observability-loki.godon-observability.svc.cluster.local:3100/loki/api/v1/push
+    snippets:
+      pipelineStages:
+        - match:
+            selector: '{component=~"api|metrics-exporter|seeder"}'
+            action: keep
 
   resources:
     requests:
