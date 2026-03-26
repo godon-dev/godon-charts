@@ -72,6 +72,9 @@ loki:
       retention_period: 168h
       max_query_length: 721h
       max_query_parallelism: 32
+    storage_config:
+      filesystem:
+        directory: /data/loki/chunks
 
   singleBinary:
     replicas: 1
@@ -82,7 +85,7 @@ loki:
           type: DirectoryOrCreate
     extraVolumeMounts:
       - name: loki-storage
-        mountPath: /var/loki
+        mountPath: /data/loki
     resources:
       requests:
         cpu: 100m
