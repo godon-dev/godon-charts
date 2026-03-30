@@ -100,6 +100,12 @@ jobs:
           fi
           echo "version=${CHART_VERSION}" >> $GITHUB_OUTPUT
 
+      - name: Update Chart.yaml to match tag
+        run: |
+          CHART_VERSION="${{ steps.chart-version.outputs.version }}"
+          sed -i "s/^version:.*/version: ${CHART_VERSION}/" charts/godon/Chart.yaml
+          echo "✅ Updated Chart.yaml to version ${CHART_VERSION}"
+
       - name: Package chart
         run: |
           cd charts/godon
