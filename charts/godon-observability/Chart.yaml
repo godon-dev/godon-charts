@@ -1,12 +1,16 @@
 apiVersion: v2
 name: godon-observability
-description: Observability stack for godon (OTel Collector + Loki + Grafana)
-version: 0.2.0
+description: Observability stack for godon (Prometheus + OTel Collector + Loki + Grafana)
+version: 0.3.0
 appVersion: "1.0"
 maintainers:
   - name: cherusk
     url: https://github.com/cherusk
 dependencies:
+  - name: prometheus
+    version: 28.14.1
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: prometheus.enabled
   - name: opentelemetry-collector
     version: 0.113.0
     repository: https://open-telemetry.github.io/opentelemetry-helm-charts
