@@ -85,6 +85,10 @@ archive-db:
 ########################################
 metrics_exporter:
   env:
+  - name: PUSH_GATEWAY_URL
+    value: "http://godon-prometheus-pushgateway:9091"
+  - name: PUSH_METRICS_ENABLED
+    value: "true"
   - name: ARCHIVE_DB_HOST
     value: "yb-tservers.godon.svc.cluster.local:5433"
   - name: ARCHIVE_DB_USER

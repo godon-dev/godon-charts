@@ -143,6 +143,7 @@ metrics_exporter:
   replicas: 1
 
   port: 9099
+  containerPort: 8089
 
   resources:
     requests:
@@ -348,7 +349,7 @@ archive-db:
       - name: YSQL_DB
         value: archive_db
       - name: PUSH_GATEWAY_URL
-        value: "http://godon-pushgateway:9091"
+        value: "http://godon-prometheus-pushgateway:9091"
       - name: PUSH_METRICS_ENABLED
         value: "true"
 
