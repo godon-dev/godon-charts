@@ -55,13 +55,14 @@ prometheus:
       enabled: true
     kubernetes-pods-slow:
       enabled: false
-
-  extraScrapeConfigs: |
-    - job_name: 'godon-metrics-exporter'
+    godon-metrics-exporter:
+      enabled: true
       scrape_interval: 5s
       static_configs:
         - targets:
           - 'godon-metrics-exporter.godon.svc.cluster.local:9099'
+
+  extraScrapeConfigs: |
 
   alertmanager:
     enabled: false
