@@ -4,6 +4,81 @@ namespace:
   name: godon-observability
 
 ########################################
+## Component | Prometheus (Metrics Collection)
+########################################
+prometheus:
+  enabled: true
+
+  server:
+    hostNetwork: false
+
+    global:
+      scrape_interval: 5s
+      scrape_timeout: 4s
+      evaluation_interval: 5s
+
+    retention: "7d"
+
+    persistentVolume:
+      enabled: false
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+    service:
+      type: ClusterIP
+      servicePort: 9090
+
+  scrapeConfigs:
+    prometheus:
+      enabled: true
+    kubernetes-api-servers:
+      enabled: false
+    kubernetes-nodes:
+      enabled: false
+    kubernetes-nodes-cadvisor:
+      enabled: false
+    kubernetes-service-endpoints:
+      enabled: true
+    kubernetes-service-endpoints-slow:
+      enabled: false
+    prometheus-pushgateway:
+      enabled: false
+    kubernetes-services:
+      enabled: false
+    kubernetes-pods:
+      enabled: true
+    kubernetes-pods-slow:
+      enabled: false
+
+  extraScrapeConfigs: |
+    - job_name: 'godon-pushgateway'
+      honor_labels: true
+      scrape_interval: 5s
+      static_configs:
+        - targets:
+          - 'godon-pushgateway.godon.svc.cluster.local:9091'
+    - job_name: 'godon-metrics-exporter'
+      scrape_interval: 5s
+      static_configs:
+        - targets:
+          - 'godon-metrics-exporter.godon.svc.cluster.local:9099'
+
+  alertmanager:
+    enabled: false
+  kube-state-metrics:
+    enabled: false
+  prometheus-node-exporter:
+    enabled: false
+  prometheus-pushgateway:
+    enabled: false
+
+########################################
 ## Component | OpenTelemetry Collector
 ########################################
 opentelemetry-collector:
@@ -151,11 +226,16 @@ grafana:
     datasources.yaml:
       apiVersion: 1
       datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://godon-observability-prometheus-server.godon-observability.svc.cluster.local:80
+          access: proxy
+          isDefault: true
         - name: Loki
           type: loki
           url: http://godon-observability-loki.godon-observability.svc.cluster.local:3100
           access: proxy
-          isDefault: true
+          isDefault: false
 
 ########################################
 ## Component | Promtail (Log Collector)
