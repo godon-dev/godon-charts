@@ -57,12 +57,6 @@ prometheus:
       enabled: false
 
   extraScrapeConfigs: |
-    - job_name: 'godon-pushgateway'
-      honor_labels: true
-      scrape_interval: 5s
-      static_configs:
-        - targets:
-          - 'godon-pushgateway.godon.svc.cluster.local:9091'
     - job_name: 'godon-metrics-exporter'
       scrape_interval: 5s
       static_configs:

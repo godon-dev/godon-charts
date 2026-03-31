@@ -19,7 +19,7 @@ spec:
     - protocol: TCP
       name: "metrics-port"
       port: {{ .Values.metrics_exporter.port }}
-      targetPort: {{ .Values.metrics_exporter.port }}
+      targetPort: {{ .Values.metrics_exporter.containerPort }}
   selector:
     component: metrics-exporter
     release: {{ .Release.Name }}
