@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "godon.fullname" . }}-mcp
+  {{- if .Values.mcp.annotations }}
+  annotations:
+    {{- toYaml .Values.mcp.annotations | nindent 4 }}
+  {{- end }}
+  labels:
+    component: mcp
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+    {{- if .Values.mcp.labels }}
+    {{- toYaml .Values.mcp.labels | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.mcp.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      component: mcp
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        component: mcp
+        release: {{ .Release.Name }}
+        {{- if .Values.mcp.podLabels }}
+        {{- toYaml .Values.mcp.podLabels | nindent 8 }}
+        {{- end }}
+    spec:
+      restartPolicy: Always
+      {{- if .Values.mcp.image.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.mcp.image.pullSecret }}
+      {{- end }}
+      serviceAccountName: {{ .Values.mcp.serviceAccountName | default "" }}
+      containers:
+        - name: godon-mcp
+          {{- include "mcp.image" . | indent 10 }}
+          resources:
+            {{- toYaml .Values.mcp.resources | nindent 12 }}
+          env:
+            {{- toYaml .Values.mcp.env | nindent 12 }}
+          {{- if .Values.mcp.livenessProbe.enabled }}
+          livenessProbe:
+            initialDelaySeconds: {{ .Values.mcp.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.mcp.livenessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.mcp.livenessProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.mcp.livenessProbe.timeoutSeconds }}
+          {{- end }}
+          volumeMounts:
+            {{- toYaml .Values.mcp.volumeMounts | nindent 12 }}
+          ports:
+            - containerPort: {{ .Values.mcp.containerPort }}
+      volumes:
+        {{- toYaml .Values.mcp.volumes | nindent 8 }}
