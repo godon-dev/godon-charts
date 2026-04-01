@@ -259,6 +259,54 @@ api:
   volumeMounts: []
 
 ########################################
+## Component | Godon MCP Server
+########################################
+mcp:
+  image:
+    repository: "ghcr.io/godon-dev/godon-mcp"
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+    pullSecret: ""
+
+  replicas: 1
+
+  port: 3001
+  containerPort: 3001
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  env:
+  - name: GODON_API_HOSTNAME
+    value: "godon-api.godon.svc.cluster.local"
+  - name: GODON_API_PORT
+    value: "9090"
+  - name: PORT
+    value: "3001"
+
+  livenessProbe:
+    enabled: false
+
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+  annotations: {}
+
+  podLabels: {}
+
+  serviceAccountName: ""
+
+  volumes: []
+
+  volumeMounts: []
+
+########################################
 ## Component | Postgres Database Storing Godon Components Meta Data
 ########################################
 metadata-db:

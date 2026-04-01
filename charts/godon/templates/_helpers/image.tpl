@@ -12,3 +12,8 @@ imagePullPolicy: {{ .Values.api.image.pullPolicy }}
 image: {{ .Values.metrics_exporter.image.repository }}:{{ .Values.metrics_exporter.image.tag }}
 imagePullPolicy: {{ .Values.metrics_exporter.image.pullPolicy }}
 {{- end }}
+
+{{- define "mcp.image" }}
+image: {{ .Values.mcp.image.repository }}:{{ .Values.mcp.image.tag }}
+imagePullPolicy: {{ .Values.mcp.image.pullPolicy }}
+{{- end }}

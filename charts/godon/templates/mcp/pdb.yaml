@@ -1,0 +1,16 @@
+{{- if .Values.mcp.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "godon.fullname" . }}-mcp
+  labels:
+    component: mcp
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  minAvailable: {{ .Values.mcp.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      component: mcp
+      release: {{ .Release.Name }}
+{{- end }}
