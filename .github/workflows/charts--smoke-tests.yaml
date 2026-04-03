@@ -360,14 +360,16 @@ jobs:
           echo "🎯 Creating target for breeder config..."
           TARGET_ID=$(cat /tmp/target_id 2>/dev/null || echo "")
 
+          # Create fallback target config at top level (heredoc works here)
+          cat > breeder-target-config.yaml << 'EOF'
+          name: "breeder-test-target"
+          targetType: "ssh"
+          address: "10.0.0.1"
+          username: "test_user"
+          EOF
+
           if [ -z "${TARGET_ID}" ] || [ "${TARGET_ID}" = "00000000-0000-4000-8000-000000000001" ]; then
             echo "⚠️  No valid target from previous tests, creating one now..."
-            cat > breeder-target-config.yaml << 'EOF'
-            name: "breeder-test-target"
-            targetType: "ssh"
-            address: "10.0.0.1"
-            username: "test_user"
-            EOF
             chmod 644 breeder-target-config.yaml
             TARGET_CREATE_OUTPUT=$(docker run --rm --network host \
               -v $(pwd):/work:ro \
@@ -385,7 +387,8 @@ jobs:
           # Test 2: Create a new breeder using local config with targetRefs
           echo "🔨 BREEDER CREATE - Creating test breeder:"
 
-          cat > breeder-smoke-config.yaml << EOF
+          # Heredoc at top level - use PLACEHOLDER, then sed to inject TARGET_ID
+          cat > breeder-smoke-config.yaml << 'EOF'
           meta:
             configVersion: "0.3"
           breeder:
@@ -398,7 +401,7 @@ jobs:
                 max: 100
           effectuation:
             targetRefs:
-              - "${TARGET_ID}"
+              - "PLACEHOLDER_TARGET_ID"
           cooperation:
             active: false
           objectives:
@@ -419,6 +422,7 @@ jobs:
                     upper: 100
           EOF
 
+          sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" breeder-smoke-config.yaml
           chmod 644 breeder-smoke-config.yaml
 
           CREATE_OUTPUT=$(docker run --rm --network host \
@@ -463,35 +467,7 @@ jobs:
           echo "🔧 BREEDER UPDATE - Updating breeder:"
 
           # Create test breeder update config in working directory
-          cat > breeder-update-config.yaml << 'EOF'
-          uuid: "PLACEHOLDER_UUID"
-          name: "updated-smoke-test-breeder"
-          description: "Updated smoke test breeder"
-          config:
-            meta:
-              configVersion: "0.3"
-            breeder:
-              type: "linux_performance"
-            settings:
-              sysctl:
-                vm.swappiness:
-                  constraints:
-                    - step: 5
-                      lower: 10
-                      upper: 90
-            objectives:
-              - name: "test_metric"
-                goal: MINIMIZE
-                reconnaissance:
-                  service: prometheus
-                  query: "scalar(test_metric)"
-                  stabilization_seconds: 1
-                  samples: 1
-                  interval: 1
-            effectuation:
-              targetRefs:
-                - "PLACEHOLDER_TARGET_ID"
-          EOF
+          printf 'uuid: "PLACEHOLDER_UUID"\nname: "updated-smoke-test-breeder"\ndescription: "Updated smoke test breeder"\nconfig:\n  meta:\n    configVersion: "0.3"\n  breeder:\n    type: "linux_performance"\n  settings:\n    sysctl:\n      vm.swappiness:\n        constraints:\n          - step: 5\n            lower: 10\n            upper: 90\n  objectives:\n    - name: "test_metric"\n      goal: MINIMIZE\n      reconnaissance:\n        service: prometheus\n        query: "scalar(test_metric)"\n        stabilization_seconds: 1\n        samples: 1\n        interval: 1\n  effectuation:\n    targetRefs:\n      - "PLACEHOLDER_TARGET_ID"\n' > breeder-update-config.yaml
 
           # Update config with actual UUID and target ID
           sed -e "s/PLACEHOLDER_UUID/${BREEDER_UUID}/" -e "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" breeder-update-config.yaml > breeder-update-config-final.yaml
@@ -526,24 +502,11 @@ jobs:
 
           # Create all test config files first
           echo "Creating test config files..."
-          cat > malformed-breeder-config.yaml << 'EOF'
-          malformed: yaml content
-          invalid:
-          EOF
+          printf 'malformed: yaml content\ninvalid:\n' > malformed-breeder-config.yaml
 
-          cat > special-chars-breeder-config.yaml << 'EOF'
-          meta:
-            configVersion: "0.3"
-          settings:
-            test: value
-          EOF
+          printf 'meta:\n  configVersion: "0.3"\nsettings:\n  test: value\n' > special-chars-breeder-config.yaml
 
-          cat > unicode-breeder-config.yaml << 'EOF'
-          meta:
-            configVersion: "0.3"
-          settings:
-            test: value
-          EOF
+          printf 'meta:\n  configVersion: "0.3"\nsettings:\n  test: value\n' > unicode-breeder-config.yaml
 
           # Fix permissions to ensure container can read them
           chmod 644 *.yaml
@@ -642,12 +605,7 @@ jobs:
           echo "🔨 CREDENTIAL CREATE - Creating test credential:"
 
           # Create test credential config
-          cat > credential-test-config.yaml << 'EOF'
-          name: "smoke-test-ssh-key"
-          credentialType: "ssh_private_key"
-          description: "SSH key for smoke testing"
-          content: "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA2Z2H7V...\n-----END RSA PRIVATE KEY-----"
-          EOF
+          printf 'name: "smoke-test-ssh-key"\ncredentialType: "ssh_private_key"\ndescription: "SSH key for smoke testing"\ncontent: "-----BEGIN RSA PRIVATE KEY-----\\nMIIEpAIBAAKCAQEA2Z2H7V...\\n-----END RSA PRIVATE KEY-----"\n' > credential-test-config.yaml
 
           chmod 644 credential-test-config.yaml
 
@@ -703,36 +661,13 @@ jobs:
 
           # Create all test config files first
           echo "Creating test config files..."
-          cat > malformed-credential-config.yaml << 'EOF'
-          name: ""
-          credentialType: "invalid_type"
-          content: ""
-          EOF
+          printf 'name: ""\ncredentialType: "invalid_type"\ncontent: ""\n' > malformed-credential-config.yaml
 
-          cat > invalid-type-credential-config.yaml << 'EOF'
-          name: "test-invalid-type"
-          credentialType: "non_existent_type"
-          description: "Testing invalid credential type"
-          content: "test content"
-          EOF
+          printf 'name: "test-invalid-type"\ncredentialType: "non_existent_type"\ndescription: "Testing invalid credential type"\ncontent: "test content"\n' > invalid-type-credential-config.yaml
 
-          cat > empty-content-credential-config.yaml << 'EOF'
-          name: "test-empty-content"
-          credentialType: "ssh_private_key"
-          description: "Testing empty content"
-          content: ""
-          EOF
+          printf 'name: "test-empty-content"\ncredentialType: "ssh_private_key"\ndescription: "Testing empty content"\ncontent: ""\n' > empty-content-credential-config.yaml
 
-          cat > special-chars-credential-config.yaml << 'EOF'
-          name: "test-cred-with-special-chars-<>-\"-\\-"
-          credentialType: "ssh_private_key"
-          description: "Testing special character handling"
-          content: >
-            -----BEGIN RSA PRIVATE KEY-----
-            MIIEpAIBAAKCAQEA2Z9Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
-            2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
-            -----END RSA PRIVATE KEY-----
-          EOF
+          printf 'name: "test-cred-special"\ncredentialType: "ssh_private_key"\ndescription: "Testing special character handling"\ncontent: "-----BEGIN RSA PRIVATE KEY----- test -----END RSA PRIVATE KEY-----"\n' > special-chars-credential-config.yaml
 
           # Fix permissions to ensure container can read them
           chmod 644 *.yaml
@@ -846,36 +781,7 @@ jobs:
 
           for i in {1..5}; do
             # Create breeder config with targetRefs
-            cat > breeder-stress-config-${i}.yaml << EOF
-            meta:
-              configVersion: "0.3"
-            breeder:
-              type: linux_performance
-            run:
-              parallel: 1
-              completion:
-                iterations:
-                  min: 10
-                  max: 50
-            effectuation:
-              targetRefs:
-                - "${TARGET_ID}"
-            cooperation:
-              active: false
-            objectives:
-              - name: stress_test_metric
-                goal: MINIMIZE
-                reconnaissance:
-                  service: prometheus
-                  query: "scalar(stress_test_metric)"
-            settings:
-              sysctl:
-                vm.swappiness:
-                  constraints:
-                    - step: 1
-                      lower: 0
-                      upper: 100
-            EOF
+            printf 'meta:\n  configVersion: "0.3"\nbreeder:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    goal: MINIMIZE\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > breeder-stress-config-${i}.yaml
 
             chmod 644 breeder-stress-config-${i}.yaml
             
@@ -911,16 +817,7 @@ jobs:
           # Create multiple credentials in succession
           echo "🔨 Creating multiple credentials..."
           for i in {1..3}; do
-            cat > credential-stress-config-${i}.yaml << EOF
-          name: "stress-test-cred-${i}"
-          credentialType: "ssh_private_key"
-          description: "Stress test credential ${i}"
-          content: >
-            -----BEGIN RSA PRIVATE KEY-----
-            MIIEpAIBAAKCAQEA2Z9Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
-            2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
-            -----END RSA PRIVATE KEY-----
-          EOF
+            printf 'name: "stress-test-cred-%d"\ncredentialType: "ssh_private_key"\ndcontent: "stress test credential %d"\ncontent: "-----BEGIN RSA PRIVATE KEY----- test key -----END RSA PRIVATE KEY-----"\n' > credential-stress-config-${i}.yaml
 
             chmod 644 credential-stress-config-${i}.yaml
 
