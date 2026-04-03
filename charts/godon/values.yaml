@@ -221,7 +221,7 @@ pushgateway:
 api:
   image:
     repository: "ghcr.io/godon-dev/godon-api"
-    tag: "0.0.18"
+    tag: "0.0.20"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -264,7 +264,7 @@ api:
 mcp:
   image:
     repository: "ghcr.io/godon-dev/godon-mcp"
-    tag: "0.0.1"
+    tag: "0.0.2"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
