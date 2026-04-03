@@ -239,6 +239,13 @@ jobs:
           # Test 2: Create a new target
           echo "🔨 TARGET CREATE - Creating test target:"
 
+          # Delete any leftover target from previous runs
+          EXISTING_ID=$(curl -s http://${API_HOST}:${API_PORT}/targets | jq -r '.[] | select(.name=="smoke-test-target") | .id' 2>/dev/null || echo "")
+          if [ -n "${EXISTING_ID}" ]; then
+            echo "Cleaning up existing target from previous run: ${EXISTING_ID}"
+            curl -s -X DELETE http://${API_HOST}:${API_PORT}/targets/${EXISTING_ID} >/dev/null 2>&1 || true
+          fi
+
           cat > target-test-config.yaml << 'EOF'
           name: "smoke-test-target"
           targetType: "ssh"
