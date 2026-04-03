@@ -127,33 +127,38 @@ jobs:
         run: |
           echo "📝 Creating test configuration files..."
           
-          # Create test breeder config - matching CI test format
+          # Create test target config
+          cat > /tmp/target-test-config.yaml << 'EOF'
+          name: "smoke-test-target"
+          targetType: "ssh"
+          address: "192.168.1.100"
+          username: "test_user"
+          description: "Test target for smoke testing"
+          EOF
+
+          # Create test breeder config - uses targetRefs (targets must be created first)
           cat > /tmp/breeder-test-config.yaml << 'EOF'
+          meta:
+            configVersion: "0.3"
           breeder:
             type: linux_performance
-
           run:
             parallel: 1
-            completion_criteria:
+            completion:
               iterations:
                 min: 10
                 max: 100
-
           effectuation:
-            targets:
-              - type: ssh
-                address: test.local
-                connection:
-                  username: test_user
-                  private_key: /path/to/key
-
+            targetRefs:
+              - "PLACEHOLDER_TARGET_ID"
           cooperation:
             active: false
-
           objectives:
             - name: test_metric
-              direction: minimize
-
+              goal: MINIMIZE
+              reconnaissance:
+                service: prometheus
+                query: "scalar(test_metric)"
           settings:
             sysctl:
               vm.swappiness:
@@ -217,6 +222,126 @@ jobs:
 
           echo "✅ Health endpoints accessible"
 
+      - name: TARGET Endpoint Tests - Regular Operations
+        run: |
+          echo "🎯 Testing TARGET endpoints - Regular Operations"
+          echo "=================================================="
+
+          CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
+          API_HOST="${{ env.API_HOST }}"
+          API_PORT="${{ env.API_PORT }}"
+
+          # Test 1: List targets (should be empty or return existing)
+          echo "📋 TARGET LIST - Initial state:"
+          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure target list || echo "⚠️  Target list failed"
+
+          # Test 2: Create a new target
+          echo "🔨 TARGET CREATE - Creating test target:"
+
+          cat > target-test-config.yaml << 'EOF'
+          name: "smoke-test-target"
+          targetType: "ssh"
+          address: "192.168.1.100"
+          username: "test_user"
+          description: "Test target for smoke testing"
+          EOF
+
+          chmod 644 target-test-config.yaml
+
+          CREATE_OUTPUT=$(docker run --rm --network host \
+            -v $(pwd):/work:ro \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            target create --file=target-test-config.yaml 2>&1 || true)
+
+          echo "${CREATE_OUTPUT}"
+
+          TARGET_ID=$(echo "${CREATE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
+
+          if [ -z "${TARGET_ID}" ]; then
+            echo "⚠️  Could not extract target ID, trying API directly"
+            TARGET_ID=$(curl -s http://${API_HOST}:${API_PORT}/targets | jq -r '.[] | select(.name=="smoke-test-target") | .id' 2>/dev/null || echo "")
+          fi
+
+          if [ -z "${TARGET_ID}" ]; then
+            echo "❌ Failed to create target or extract ID"
+            echo "⚠️  Using placeholder for further tests"
+            TARGET_ID="00000000-0000-4000-8000-000000000001"
+          else
+            echo "✅ Target created with ID: ${TARGET_ID}"
+            echo "${TARGET_ID}" > /tmp/target_id
+          fi
+
+          # Test 3: List targets after creation
+          echo "📋 TARGET LIST - After creation:"
+          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure target list || echo "⚠️  Target list failed"
+
+          # Test 4: Get specific target
+          echo "🔍 TARGET SHOW - Getting specific target:"
+          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure target show --id="${TARGET_ID}" || echo "⚠️  Target show failed"
+
+          echo "✅ TARGET regular operations completed"
+
+      - name: TARGET Endpoint Tests - Adversarial Operations
+        run: |
+          echo "🚨 Testing TARGET endpoints - Adversarial Operations"
+          echo "======================================================"
+
+          CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
+          API_HOST="${{ env.API_HOST }}"
+          API_PORT="${{ env.API_PORT }}"
+
+          # Test 1: Invalid UUID format
+          echo "🧪 TEST: TARGET SHOW with invalid UUID format (should reject):"
+          if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure target show --id="invalid-uuid-format" 2>&1; then
+            echo "❌ FAIL: Should have rejected invalid UUID format"
+          else
+            echo "✅ PASS: Invalid UUID format properly rejected"
+          fi
+
+          # Test 2: Non-existent target
+          echo "🧪 TEST: TARGET SHOW with non-existent UUID (should return error):"
+          if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure target show --id="00000000-0000-4000-8000-000000000000" 2>&1; then
+            echo "❌ FAIL: Should have returned error for non-existent target"
+          else
+            echo "✅ PASS: Non-existent target properly handled"
+          fi
+
+          # Test 3: Delete non-existent target
+          echo "🧪 TEST: TARGET DELETE with non-existent UUID (should return error):"
+          if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure target delete --id="99999999-9999-4999-9999-999999999999" 2>&1; then
+            echo "❌ FAIL: Should have returned error for non-existent target"
+          else
+            echo "✅ PASS: Non-existent target deletion properly handled"
+          fi
+
+          # Test 4: Duplicate target name
+          echo "🧪 TEST: TARGET CREATE with duplicate name (should reject):"
+          cat > dup-target-config.yaml << 'EOF'
+          name: "smoke-test-target"
+          targetType: "ssh"
+          address: "10.0.0.2"
+          EOF
+
+          chmod 644 dup-target-config.yaml
+          if docker run --rm --network host \
+            -v $(pwd):/work:ro \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            target create --file=dup-target-config.yaml 2>&1; then
+            echo "❌ FAIL: Should have rejected duplicate target name"
+          else
+            echo "✅ PASS: Duplicate target name properly rejected"
+          fi
+
+          echo "✅ TARGET adversarial operations completed"
+
       - name: BREEDER Endpoint Tests - Regular Operations
         run: |
           echo "🔬 Testing BREEDER endpoints - Regular Operations"
@@ -231,26 +356,76 @@ jobs:
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "⚠️  Breeder list failed"
 
-          # Test 2: Create a new breeder
+          # Create a target for the breeder config (breeder configs require targetRefs)
+          echo "🎯 Creating target for breeder config..."
+          TARGET_ID=$(cat /tmp/target_id 2>/dev/null || echo "")
+
+          if [ -z "${TARGET_ID}" ] || [ "${TARGET_ID}" = "00000000-0000-4000-8000-000000000001" ]; then
+            echo "⚠️  No valid target from previous tests, creating one now..."
+            cat > breeder-target-config.yaml << 'EOF'
+            name: "breeder-test-target"
+            targetType: "ssh"
+            address: "10.0.0.1"
+            username: "test_user"
+            EOF
+            chmod 644 breeder-target-config.yaml
+            TARGET_CREATE_OUTPUT=$(docker run --rm --network host \
+              -v $(pwd):/work:ro \
+              -w /work \
+              "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+              target create --file=breeder-target-config.yaml 2>&1 || true)
+            TARGET_ID=$(echo "${TARGET_CREATE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
+            if [ -z "${TARGET_ID}" ]; then
+              TARGET_ID=$(curl -s http://${API_HOST}:${API_PORT}/targets | jq -r '[.[] | select(.name=="breeder-test-target") | .id][0]' 2>/dev/null || echo "")
+            fi
+          fi
+
+          echo "Using target ID: ${TARGET_ID}"
+
+          # Test 2: Create a new breeder using local config with targetRefs
           echo "🔨 BREEDER CREATE - Creating test breeder:"
 
-          # Fetch config from upstream godon repository to unique filename
-          curl -s https://raw.githubusercontent.com/godon-dev/godon/refs/heads/master/examples/network.yml -o network-upstream.yml
+          cat > breeder-smoke-config.yaml << EOF
+          meta:
+            configVersion: "0.3"
+          breeder:
+            type: linux_performance
+          run:
+            parallel: 1
+            completion:
+              iterations:
+                min: 10
+                max: 100
+          effectuation:
+            targetRefs:
+              - "${TARGET_ID}"
+          cooperation:
+            active: false
+          objectives:
+            - name: test_metric
+              goal: MINIMIZE
+              reconnaissance:
+                service: prometheus
+                query: "scalar(test_metric)"
+                stabilization_seconds: 10
+                samples: 3
+                interval: 2
+          settings:
+            sysctl:
+              vm.swappiness:
+                constraints:
+                  - step: 1
+                    lower: 0
+                    upper: 100
+          EOF
 
-          # Fix file permissions so container can read it
-          chmod 644 network-upstream.yml
-
-          echo "📝 DEBUG: Verifying fetched config file:"
-          cat network-upstream.yml
-          echo "File exists in workflow: $(ls -la network-upstream.yml)"
+          chmod 644 breeder-smoke-config.yaml
 
           CREATE_OUTPUT=$(docker run --rm --network host \
             -v $(pwd):/work \
             -w /work \
-            -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
-            -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="smoke-test-breeder" --file=network-upstream.yml 2>&1 || true)
+            breeder create --name="smoke-test-breeder" --file=breeder-smoke-config.yaml 2>&1 || true)
 
           echo "Create output: ${CREATE_OUTPUT}"
 
@@ -294,7 +469,7 @@ jobs:
           description: "Updated smoke test breeder"
           config:
             meta:
-              configVersion: "0.2"
+              configVersion: "0.3"
             breeder:
               type: "linux_performance"
             settings:
@@ -306,7 +481,7 @@ jobs:
                       upper: 90
             objectives:
               - name: "test_metric"
-                direction: minimize
+                goal: MINIMIZE
                 reconnaissance:
                   service: prometheus
                   query: "scalar(test_metric)"
@@ -314,16 +489,12 @@ jobs:
                   samples: 1
                   interval: 1
             effectuation:
-              targets:
-                - type: "ssh"
-                  id: "test_target"
-                  address: "10.0.5.53"
-                  username: "test_user"
-                  credentialName: "test_credential"
+              targetRefs:
+                - "PLACEHOLDER_TARGET_ID"
           EOF
 
-          # Update config with actual UUID
-          sed "s/PLACEHOLDER_UUID/${BREEDER_UUID}/" breeder-update-config.yaml > breeder-update-config-final.yaml
+          # Update config with actual UUID and target ID
+          sed -e "s/PLACEHOLDER_UUID/${BREEDER_UUID}/" -e "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" breeder-update-config.yaml > breeder-update-config-final.yaml
           chmod 644 breeder-update-config-final.yaml
 
           docker run --rm --network host \
@@ -362,14 +533,14 @@ jobs:
 
           cat > special-chars-breeder-config.yaml << 'EOF'
           meta:
-            configVersion: "0.2"
+            configVersion: "0.3"
           settings:
             test: value
           EOF
 
           cat > unicode-breeder-config.yaml << 'EOF'
           meta:
-            configVersion: "0.2"
+            configVersion: "0.3"
           settings:
             test: value
           EOF
@@ -664,11 +835,48 @@ jobs:
           
           # Create multiple breeders in succession
           echo "🔨 Creating multiple breeders..."
-          for i in {1..5}; do
-            # Download the current example config for each stress test breeder
-            curl -s https://raw.githubusercontent.com/godon-dev/godon/refs/heads/master/examples/network.yml -o breeder-stress-config-${i}.yaml
+          
+          # Get a target ID for breeder configs
+          TARGET_ID=$(cat /tmp/target_id 2>/dev/null || echo "")
+          if [ -z "${TARGET_ID}" ]; then
+            echo "⚠️  No target ID available, fetching from API..."
+            TARGET_ID=$(curl -s http://${API_HOST}:${API_PORT}/targets | jq -r '[.[] | .id][0]' 2>/dev/null || echo "")
+          fi
+          echo "Using target ID for stress test breeders: ${TARGET_ID}"
 
-            # Fix file permissions so container can read it
+          for i in {1..5}; do
+            # Create breeder config with targetRefs
+            cat > breeder-stress-config-${i}.yaml << EOF
+            meta:
+              configVersion: "0.3"
+            breeder:
+              type: linux_performance
+            run:
+              parallel: 1
+              completion:
+                iterations:
+                  min: 10
+                  max: 50
+            effectuation:
+              targetRefs:
+                - "${TARGET_ID}"
+            cooperation:
+              active: false
+            objectives:
+              - name: stress_test_metric
+                goal: MINIMIZE
+                reconnaissance:
+                  service: prometheus
+                  query: "scalar(stress_test_metric)"
+            settings:
+              sysctl:
+                vm.swappiness:
+                  constraints:
+                    - step: 1
+                      lower: 0
+                      upper: 100
+            EOF
+
             chmod 644 breeder-stress-config-${i}.yaml
             
             # Verify API is reachable before each request
@@ -682,8 +890,6 @@ jobs:
               if docker run --rm --network host \
                 -v $(pwd):/work \
                 -w /work \
-                -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
-                -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
                 "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
                 breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml; then
                 echo "✅ Breeder ${i} created"
@@ -773,11 +979,24 @@ jobs:
             --hostname=${API_HOST} --port=${API_PORT} --insecure credential list 2>/dev/null || echo "[]")
           
           # Extract IDs of test credentials
-          echo "${CRED_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test")) | .id' 2>/dev/null | while read ID; do
+          echo "${CRED_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test") or contains("breeder-test")) | .id' 2>/dev/null | while read ID; do
             if [ -n "${ID}" ]; then
               echo "Deleting credential: ${ID}"
               docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
                 --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="${ID}" || echo "Failed to delete ${ID}"
+            fi
+          done
+          
+          # Get list of targets and clean up test data
+          echo "Cleaning up test targets..."
+          TARGET_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure target list 2>/dev/null || echo "[]")
+          
+          echo "${TARGET_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test") or contains("breeder-test")) | .id' 2>/dev/null | while read ID; do
+            if [ -n "${ID}" ]; then
+              echo "Deleting target: ${ID}"
+              docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+                --hostname=${API_HOST} --port=${API_PORT} --insecure target delete --id="${ID}" || echo "Failed to delete ${ID}"
             fi
           done
           
@@ -793,6 +1012,8 @@ jobs:
           echo ""
           echo "Test Categories Covered:"
           echo "  🏥 Health & Root Endpoints"
+          echo "  🎯 TARGET Regular Operations (create, read, list)"
+          echo "  🚨 TARGET Adversarial Operations (invalid inputs, edge cases)"
           echo "  🔬 BREEDER Regular Operations (create, read, update, delete)"
           echo "  🚨 BREEDER Adversarial Operations (invalid inputs, edge cases)"
           echo "  🔐 CREDENTIAL Regular Operations (create, read, delete)"
@@ -803,6 +1024,10 @@ jobs:
           echo "Endpoints Tested:"
           echo "  GET    /health"
           echo "  GET    /"
+          echo "  GET    /targets"
+          echo "  POST   /targets"
+          echo "  GET    /targets/{id}"
+          echo "  DELETE /targets/{id}"
           echo "  GET    /breeders"
           echo "  POST   /breeders"
           echo "  GET    /breeders/{uuid}"
@@ -814,10 +1039,11 @@ jobs:
           echo "  DELETE /credentials/{credential_id}"
           echo ""
           echo "Test Scenarios:"
-          echo "  ✅ Valid CRUD operations"
+          echo "  ✅ Valid CRUD operations (breeders, credentials, targets)"
           echo "  ✅ Invalid UUID format handling"
           echo "  ✅ Non-existent resource handling"
           echo "  ✅ Malformed data rejection"
+          echo "  ✅ Duplicate name rejection"
           echo "  ✅ Special character handling"
           echo "  ✅ Unicode character handling"
           echo "  ✅ Empty list handling"
