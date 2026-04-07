@@ -23,7 +23,7 @@ godon_seeder:
   enabled: true
   image:
     repository: ghcr.io/godon-dev/godon-seeder
-    tag: 0.0.20
+    tag: 0.0.21
     pullPolicy: IfNotPresent
     pullSecret: ""
   resources:
