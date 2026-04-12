@@ -40,7 +40,7 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.32.0"
   - name: BREEDER_VERSION
-    value: "0.31.0"
+    value: "0.36.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -105,8 +105,12 @@ windmill:
           value: "yugabyte"
         - name: GODON_ARCHIVE_DB_PASSWORD
           value: "yugabyte"
+        - name: PUSH_GATEWAY_URL
+          value: "http://godon-prometheus-pushgateway:9091"
+        - name: PUSH_METRICS_ENABLED
+          value: "true"
         - name: WHITELIST_ENVS
-          value: "OTEL_EXPORTER_OTLP_ENDPOINT,OTEL_SERVICE_NAME,GODON_API_SERVICE_PORT,GODON_METADATA_DB_SERVICE_PORT,YB_TSERVER_SERVICE_SERVICE_PORT,GODON_API_SERVICE_HOST,GODON_METADATA_DB_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_PORT_TCP_YSQL_PORT,GODON_ARCHIVE_DB_SERVICE_HOST,GODON_ARCHIVE_DB_SERVICE_PORT,GODON_ARCHIVE_DB_USER,GODON_ARCHIVE_DB_PASSWORD"
+          value: "OTEL_EXPORTER_OTLP_ENDPOINT,OTEL_SERVICE_NAME,GODON_API_SERVICE_PORT,GODON_METADATA_DB_SERVICE_PORT,YB_TSERVER_SERVICE_SERVICE_PORT,GODON_API_SERVICE_HOST,GODON_METADATA_DB_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_PORT_TCP_YSQL_PORT,GODON_ARCHIVE_DB_SERVICE_HOST,GODON_ARCHIVE_DB_SERVICE_PORT,GODON_ARCHIVE_DB_USER,GODON_ARCHIVE_DB_PASSWORD,PUSH_GATEWAY_URL,PUSH_METRICS_ENABLED"
         resources:
           requests:
             cpu: "50m"
@@ -155,7 +159,7 @@ metrics_exporter:
 
   env:
   - name: PUSH_GATEWAY_URL
-    value: "http://godon-pushgateway:9091"
+    value: "http://godon-prometheus-pushgateway:9091"
   - name: PUSH_METRICS_ENABLED
     value: "true"
 
