@@ -207,25 +207,58 @@ jobs:
           
           echo "✅ Test configuration files created"
 
-      - name: Test Health and Root Endpoints
-        id: health_test
+      - name: Setup Test Framework
         run: |
+          cat > /tmp/smoke-test-helpers.sh << 'HELPER_EOF'
+          SMOKE_RESULTS="/tmp/smoke-results.txt"
+
+          _pass() {
+            echo "  ✅ $1"
+            echo "PASS|$1" >> "$SMOKE_RESULTS"
+          }
+
+          _fail() {
+            echo "  ❌ $1"
+            echo "FAIL|$1" >> "$SMOKE_RESULTS"
+          }
+
+          run_test() {
+            local name="$1"; shift
+            if "$@" 2>&1; then
+              _pass "$name"
+            else
+              _fail "$name"
+            fi
+          }
+
+          run_test_silent() {
+            local name="$1"; shift
+            if "$@" >/dev/null 2>&1; then
+              _pass "$name"
+            else
+              _fail "$name"
+            fi
+          }
+          HELPER_EOF
+
+          > /tmp/smoke-results.txt
+          echo "✅ Test framework initialized"
+
+      - name: Test Health and Root Endpoints
+        run: |
+          set +e
+          source /tmp/smoke-test-helpers.sh
           echo "🏥 Testing health and root endpoints..."
 
           API_URL="http://${{ env.API_HOST }}:${{ env.API_PORT }}"
 
-          # Test health endpoint
-          echo "Testing /health endpoint:"
-          curl -f ${API_URL}/health | jq . || echo "Health endpoint failed"
-
-          # Test root endpoint
-          echo "Testing / endpoint:"
-          curl -f ${API_URL}/ | jq . || echo "Root endpoint failed"
-
-          echo "✅ Health endpoints accessible"
+          run_test "Health endpoint" curl -sf ${API_URL}/health
+          run_test "Root endpoint" curl -sf ${API_URL}/
 
       - name: TARGET Endpoint Tests - Regular Operations
         run: |
+          set +e
+          source /tmp/smoke-test-helpers.sh
           echo "🎯 Testing TARGET endpoints - Regular Operations"
           echo "=================================================="
 
@@ -235,8 +268,8 @@ jobs:
 
           # Test 1: List targets (should be empty or return existing)
           echo "📋 TARGET LIST - Initial state:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure target list || echo "⚠️  Target list failed"
+          run_test "Target list (initial)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure target list
 
           # Test 2: Create a new target
           echo "🔨 TARGET CREATE - Creating test target:"
@@ -264,37 +297,41 @@ jobs:
             -v $(pwd):/work:ro \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            target create --file=target-test-config.yaml 2>&1 || true)
+            target create --file=target-test-config.yaml 2>&1)
 
+          if [ $? -eq 0 ]; then
+            _pass "Target create"
+          else
+            _fail "Target create"
+          fi
           echo "${CREATE_OUTPUT}"
 
           TARGET_ID=$(echo "${CREATE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
 
           if [ -z "${TARGET_ID}" ]; then
-            echo "⚠️  Could not extract target ID, trying API directly"
+            echo "⚠️  Could not extract target ID from create output, trying API directly"
             TARGET_ID=$(curl -s http://${API_HOST}:${API_PORT}/targets | jq -r '.[] | select(.name=="smoke-test-target") | .id' 2>/dev/null || echo "")
           fi
 
           if [ -z "${TARGET_ID}" ]; then
-            echo "❌ Failed to create target or extract ID"
+            _fail "Extract target ID"
             echo "⚠️  Using placeholder for further tests"
             TARGET_ID="00000000-0000-4000-8000-000000000001"
           else
+            _pass "Extract target ID"
             echo "✅ Target created with ID: ${TARGET_ID}"
             echo "${TARGET_ID}" > /tmp/target_id
           fi
 
           # Test 3: List targets after creation
           echo "📋 TARGET LIST - After creation:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure target list || echo "⚠️  Target list failed"
+          run_test "Target list (after create)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure target list
 
           # Test 4: Get specific target
           echo "🔍 TARGET SHOW - Getting specific target:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure target show --id="${TARGET_ID}" || echo "⚠️  Target show failed"
-
-          echo "✅ TARGET regular operations completed"
+          run_test "Target show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure target show --id="${TARGET_ID}"
 
       - name: TARGET Endpoint Tests - Adversarial Operations
         run: |
@@ -356,6 +393,8 @@ jobs:
 
       - name: BREEDER Endpoint Tests - Regular Operations
         run: |
+          set +e
+          source /tmp/smoke-test-helpers.sh
           echo "🔬 Testing BREEDER endpoints - Regular Operations"
           echo "===================================================="
 
@@ -365,8 +404,8 @@ jobs:
 
           # Test 1: List breeders (should be empty or return existing)
           echo "📋 BREEDER LIST - Initial state:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "⚠️  Breeder list failed"
+          run_test "Breeder list (initial)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list
 
           # Create a target for the breeder config (breeder configs require targetRefs)
           echo "🎯 Creating target for breeder config..."
@@ -388,7 +427,12 @@ jobs:
               -v $(pwd):/work:ro \
               -w /work \
               "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              target create --file=breeder-target-config.yaml 2>&1 || true)
+              target create --file=breeder-target-config.yaml 2>&1)
+            if [ $? -eq 0 ]; then
+              _pass "Fallback target create"
+            else
+              _fail "Fallback target create"
+            fi
             TARGET_ID=$(echo "${TARGET_CREATE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
             if [ -z "${TARGET_ID}" ]; then
               TARGET_ID=$(curl -s http://${API_HOST}:${API_PORT}/targets | jq -r '[.[] | select(.name=="breeder-test-target") | .id][0]' 2>/dev/null || echo "")
@@ -442,17 +486,24 @@ jobs:
             -v $(pwd):/work \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="smoke-test-breeder" --file=breeder-smoke-config.yaml 2>&1 || true)
+            breeder create --name="smoke-test-breeder" --file=breeder-smoke-config.yaml 2>&1)
 
+          if [ $? -eq 0 ]; then
+            _pass "Breeder create"
+          else
+            _fail "Breeder create"
+          fi
           echo "Create output: ${CREATE_OUTPUT}"
 
           # Extract UUID from create output - look for UUID pattern in output
           BREEDER_UUID=$(echo "${CREATE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
 
           if [ -z "${BREEDER_UUID}" ]; then
-            echo "⚠️  Could not extract breeder UUID, using placeholder for further tests"
+            _fail "Extract breeder UUID"
+            echo "⚠️  Using placeholder for further tests"
             BREEDER_UUID="550e8400-e29b-41d4-a716-446655440000"
           else
+            _pass "Extract breeder UUID"
             echo "✅ Breeder created with UUID: ${BREEDER_UUID}"
             echo "${BREEDER_UUID}" > /tmp/breeder_uuid
           fi
@@ -460,7 +511,12 @@ jobs:
           # Test 3: List breeders after creation and extract UUID
           echo "📋 BREEDER LIST - After creation:"
           LIST_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list 2>&1 || echo "")
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list 2>&1)
+          if [ $? -eq 0 ]; then
+            _pass "Breeder list (after create)"
+          else
+            _fail "Breeder list (after create)"
+          fi
           echo "${LIST_OUTPUT}"
           
           # Extract UUID from list output (more reliable than create output)
@@ -473,8 +529,8 @@ jobs:
 
           # Test 4: Get specific breeder
           echo "🔍 BREEDER SHOW - Getting specific breeder:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="${BREEDER_UUID}" || echo "⚠️  Breeder show failed"
+          run_test "Breeder show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="${BREEDER_UUID}"
 
           # Test 5: Update breeder (if implemented)
           echo "🔧 BREEDER UPDATE - Updating breeder:"
@@ -486,23 +542,21 @@ jobs:
           sed -e "s/PLACEHOLDER_UUID/${BREEDER_UUID}/" -e "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" breeder-update-config.yaml > breeder-update-config-final.yaml
           chmod 644 breeder-update-config-final.yaml
 
-          docker run --rm --network host \
+          run_test "Breeder update" docker run --rm --network host \
             -v $(pwd):/work \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder update --file=breeder-update-config-final.yaml || echo "⚠️  Breeder update not implemented or failed"
+            breeder update --file=breeder-update-config-final.yaml
 
           # Test 6: Delete breeder
           echo "🗑️  BREEDER PURGE - Deleting breeder (with force flag):"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --force --id="${BREEDER_UUID}" || echo "⚠️  Breeder purge failed"
+          run_test "Breeder purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --force --id="${BREEDER_UUID}"
 
           # Test 7: List breeders after deletion
           echo "📋 BREEDER LIST - After deletion:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "⚠️  Breeder list failed"
-
-          echo "✅ BREEDER regular operations completed"
+          run_test "Breeder list (after delete)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list
 
       - name: BREEDER Endpoint Tests - Adversarial Operations
         run: |
@@ -602,6 +656,8 @@ jobs:
 
       - name: CREDENTIAL Endpoint Tests - Regular Operations
         run: |
+          set +e
+          source /tmp/smoke-test-helpers.sh
           echo "🔐 Testing CREDENTIAL endpoints - Regular Operations"
           echo "======================================================"
 
@@ -611,8 +667,8 @@ jobs:
           
           # Test 1: List credentials (should be empty or return existing)
           echo "📋 CREDENTIAL LIST - Initial state:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list || echo "⚠️  Credential list failed"
+          run_test "Credential list (initial)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list
           
           # Test 2: Create a new credential
           echo "🔨 CREDENTIAL CREATE - Creating test credential:"
@@ -626,42 +682,47 @@ jobs:
             -v $(pwd):/work:ro \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            credential create --file=credential-test-config.yaml 2>&1 || true)
-          
+            credential create --file=credential-test-config.yaml 2>&1)
+
+          if [ $? -eq 0 ]; then
+            _pass "Credential create"
+          else
+            _fail "Credential create"
+          fi
           echo "${CREATE_OUTPUT}"
           
           # Extract credential ID from create output - look for UUID pattern
           CRED_ID=$(echo "${CREATE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
           
           if [ -z "${CRED_ID}" ]; then
-            echo "⚠️  Could not extract credential ID, using placeholder for further tests"
+            _fail "Extract credential ID"
+            echo "⚠️  Using placeholder for further tests"
             CRED_ID="550e8400-e29b-41d4-a716-446655440010"
           else
+            _pass "Extract credential ID"
             echo "✅ Credential created with ID: ${CRED_ID}"
             echo "${CRED_ID}" > /tmp/credential_id
           fi
           
           # Test 3: List credentials after creation
           echo "📋 CREDENTIAL LIST - After creation:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list || echo "⚠️  Credential list failed"
+          run_test "Credential list (after create)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list
           
           # Test 4: Get specific credential
           echo "🔍 CREDENTIAL SHOW - Getting specific credential:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="${CRED_ID}" || echo "⚠️  Credential show failed"
+          run_test "Credential show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential show --id="${CRED_ID}"
           
           # Test 5: Delete credential
           echo "🗑️  CREDENTIAL DELETE - Deleting credential:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="${CRED_ID}" || echo "⚠️  Credential delete failed"
+          run_test "Credential delete" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="${CRED_ID}"
           
           # Test 6: List credentials after deletion
           echo "📋 CREDENTIAL LIST - After deletion:"
-          docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list || echo "⚠️  Credential list failed"
-          
-          echo "✅ CREDENTIAL regular operations completed"
+          run_test "Credential list (after delete)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list
 
       - name: CREDENTIAL Endpoint Tests - Adversarial Operations
         run: |
@@ -774,6 +835,8 @@ jobs:
 
       - name: Integration Stress Test - Multiple Operations
         run: |
+          set +e
+          source /tmp/smoke-test-helpers.sh
           echo "🔄 Testing Integration Stress - Multiple Concurrent Operations"
           echo "================================================================"
 
@@ -792,6 +855,9 @@ jobs:
           fi
           echo "Using target ID for stress test breeders: ${TARGET_ID}"
 
+          BREEDER_STRESS_PASS=0
+          BREEDER_STRESS_FAIL=0
+
           for i in {1..5}; do
             # Create breeder config with targetRefs
             printf 'meta:\n  configVersion: "0.3"\nbreeder:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > breeder-stress-config-${i}.yaml
@@ -799,41 +865,48 @@ jobs:
             chmod 644 breeder-stress-config-${i}.yaml
             
             # Verify API is reachable before each request
-            echo "Testing API connectivity..."
-            if ! curl -f http://${API_HOST}:${API_PORT}/health >/dev/null 2>&1; then
+            if ! curl -sf http://${API_HOST}:${API_PORT}/health >/dev/null 2>&1; then
               echo "⚠️  API not reachable, waiting..."
               sleep 3
             fi
 
+            STRESS_CREATED=false
             for attempt in 1 2 3; do
               if docker run --rm --network host \
                 -v $(pwd):/work \
                 -w /work \
                 "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-                breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml; then
-                echo "✅ Breeder ${i} created"
+                breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml 2>&1; then
+                STRESS_CREATED=true
                 break
               else
                 echo "Attempt ${attempt}/3 failed, retrying in 3s..."
                 sleep 3
               fi
-            done || echo "⚠️  Breeder ${i} creation failed after retries"
+            done
+
+            if [ "${STRESS_CREATED}" = true ]; then
+              _pass "Stress breeder ${i} create"
+            else
+              _fail "Stress breeder ${i} create"
+            fi
             
             sleep 2
           done
           
           # List all breeders to verify
           echo "📋 Listing all breeders after stress test:"
-          retry_cli docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "⚠️  Breeder list failed"
+          run_test "Breeder list (post-stress)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list
           
           # Create multiple credentials in succession
           echo "🔨 Creating multiple credentials..."
           for i in {1..3}; do
-            printf 'name: "stress-test-cred-%d"\ncredentialType: "ssh_private_key"\ndcontent: "stress test credential %d"\ncontent: "-----BEGIN RSA PRIVATE KEY----- test key -----END RSA PRIVATE KEY-----"\n' > credential-stress-config-${i}.yaml
+            printf 'name: "stress-test-cred-%d"\ncredentialType: "ssh_private_key"\ncontent: "-----BEGIN RSA PRIVATE KEY----- test key -----END RSA PRIVATE KEY-----"\n' $i > credential-stress-config-${i}.yaml
 
             chmod 644 credential-stress-config-${i}.yaml
 
+            CRED_CREATED=false
             for attempt in 1 2 3; do
               if docker run --rm --network host \
                 -v $(pwd):/work \
@@ -841,24 +914,62 @@ jobs:
                 -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
                 -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
                 "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-                credential create --file=credential-stress-config-${i}.yaml; then
-                echo "✅ Credential ${i} created"
+                credential create --file=credential-stress-config-${i}.yaml 2>&1; then
+                CRED_CREATED=true
                 break
               else
                 echo "Attempt ${attempt}/3 failed, retrying in 3s..."
                 sleep 3
               fi
-            done || echo "⚠️  Credential ${i} creation failed after retries"
+            done
+
+            if [ "${CRED_CREATED}" = true ]; then
+              _pass "Stress credential ${i} create"
+            else
+              _fail "Stress credential ${i} create"
+            fi
             
             sleep 2
           done
           
           # List all credentials to verify
           echo "📋 Listing all credentials after stress test:"
-          retry_cli docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list || echo "⚠️  Credential list failed"
-          
-          echo "✅ Integration stress test completed"
+          run_test "Credential list (post-stress)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list
+
+      - name: Verify Test Results
+        if: always()
+        run: |
+          echo "📊 Verifying test results..."
+
+          if [ ! -f /tmp/smoke-results.txt ]; then
+            echo "❌ No results file found — test framework may not have initialized"
+            exit 1
+          fi
+
+          PASS_COUNT=$(grep -c "^PASS|" /tmp/smoke-results.txt 2>/dev/null || echo "0")
+          FAIL_COUNT=$(grep -c "^FAIL|" /tmp/smoke-results.txt 2>/dev/null || echo "0")
+          TOTAL=$((PASS_COUNT + FAIL_COUNT))
+
+          echo ""
+          echo "=============================="
+          echo "  SMOKE TEST RESULTS"
+          echo "=============================="
+          echo "  Total:  ${TOTAL}"
+          echo "  Passed: ${PASS_COUNT}"
+          echo "  Failed: ${FAIL_COUNT}"
+          echo "=============================="
+          echo ""
+
+          if [ "${FAIL_COUNT}" -gt 0 ]; then
+            echo "Failed tests:"
+            grep "^FAIL|" /tmp/smoke-results.txt | sed 's/^FAIL|/  ❌ /'
+            echo ""
+            echo "❌ SMOKE TESTS FAILED — ${FAIL_COUNT} test(s) did not pass"
+            exit 1
+          fi
+
+          echo "✅ ALL ${PASS_COUNT} SMOKE TESTS PASSED"
 
       - name: Cleanup Test Data
         if: always()
