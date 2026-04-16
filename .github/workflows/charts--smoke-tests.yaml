@@ -131,9 +131,11 @@ jobs:
           cat > /tmp/target-test-config.yaml << 'EOF'
           name: "smoke-test-target"
           targetType: "ssh"
-          address: "192.168.1.100"
-          username: "test_user"
-          description: "Test target for smoke testing"
+          spec:
+            address: "192.168.1.100"
+            username: "test_user"
+          metadata:
+            description: "Test target for smoke testing"
           EOF
 
           # Create test breeder config - uses targetRefs (targets must be created first)
@@ -249,9 +251,11 @@ jobs:
           cat > target-test-config.yaml << 'EOF'
           name: "smoke-test-target"
           targetType: "ssh"
-          address: "192.168.1.100"
-          username: "test_user"
-          description: "Test target for smoke testing"
+          spec:
+            address: "192.168.1.100"
+            username: "test_user"
+          metadata:
+            description: "Test target for smoke testing"
           EOF
 
           chmod 644 target-test-config.yaml
@@ -333,7 +337,8 @@ jobs:
           cat > dup-target-config.yaml << 'EOF'
           name: "smoke-test-target"
           targetType: "ssh"
-          address: "10.0.0.2"
+          spec:
+            address: "10.0.0.2"
           EOF
 
           chmod 644 dup-target-config.yaml
@@ -371,8 +376,9 @@ jobs:
           cat > breeder-target-config.yaml << 'EOF'
           name: "breeder-test-target"
           targetType: "ssh"
-          address: "10.0.0.1"
-          username: "test_user"
+          spec:
+            address: "10.0.0.1"
+            username: "test_user"
           EOF
 
           if [ -z "${TARGET_ID}" ] || [ "${TARGET_ID}" = "00000000-0000-4000-8000-000000000001" ]; then
