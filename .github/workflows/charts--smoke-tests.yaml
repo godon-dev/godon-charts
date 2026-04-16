@@ -871,16 +871,19 @@ jobs:
 
             STRESS_CREATED=false
             for attempt in 1 2 3; do
-              if docker run --rm --network host \
+              STRESS_OUTPUT=$(docker run --rm --network host \
                 -v $(pwd):/work \
                 -w /work \
                 "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-                breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml 2>&1; then
+                breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml 2>&1)
+
+              if echo "${STRESS_OUTPUT}" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
                 STRESS_CREATED=true
                 break
               else
-                echo "Attempt ${attempt}/3 failed, retrying in 3s..."
-                sleep 3
+                echo "Attempt ${attempt}/3 failed, retrying in 5s..."
+                echo "Output: ${STRESS_OUTPUT}"
+                sleep 5
               fi
             done
 
