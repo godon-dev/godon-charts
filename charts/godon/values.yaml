@@ -140,7 +140,7 @@ windmill:
 metrics_exporter:
   image:
     repository: "ghcr.io/godon-dev/godon-metrics-exporter"
-    tag: "0.0.3"
+    tag: "0.0.4"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -158,6 +158,8 @@ metrics_exporter:
       memory: 512Mi
 
   env:
+  - name: HOST
+    value: "0.0.0.0"
   - name: PUSH_GATEWAY_URL
     value: "http://godon-prometheus-pushgateway:9091"
   - name: PUSH_METRICS_ENABLED
