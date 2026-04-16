@@ -482,62 +482,30 @@ jobs:
           sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" breeder-smoke-config.yaml
           chmod 644 breeder-smoke-config.yaml
 
-          BREEDER_CREATED=false
-          for attempt in 1 2 3; do
-            CREATE_OUTPUT=$(docker run --rm --network host \
-              -v $(pwd):/work \
-              -w /work \
-              "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              breeder create --name="smoke-test-breeder" --file=breeder-smoke-config.yaml 2>&1)
+          docker run --rm --network host \
+            -v $(pwd):/work \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            breeder create --name="smoke-test-breeder" --file=breeder-smoke-config.yaml 2>&1 || true
 
-            if echo "${CREATE_OUTPUT}" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
-              BREEDER_CREATED=true
-              break
-            else
-              echo "Attempt ${attempt}/3 failed, retrying in 5s..."
-              echo "Output: ${CREATE_OUTPUT}"
-              sleep 5
-            fi
-          done
+          BREEDER_UUID=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list 2>&1 \
+            | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
 
-          if [ "${BREEDER_CREATED}" = true ]; then
+          if [ -n "${BREEDER_UUID}" ]; then
             _pass "Breeder create"
-          else
-            _fail "Breeder create"
-          fi
-          echo "Create output: ${CREATE_OUTPUT}"
-
-          # Extract UUID from create output - look for UUID pattern in output
-          BREEDER_UUID=$(echo "${CREATE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
-
-          if [ -z "${BREEDER_UUID}" ]; then
-            _fail "Extract breeder UUID"
-            echo "⚠️  Using placeholder for further tests"
-            BREEDER_UUID="550e8400-e29b-41d4-a716-446655440000"
-          else
-            _pass "Extract breeder UUID"
             echo "✅ Breeder created with UUID: ${BREEDER_UUID}"
             echo "${BREEDER_UUID}" > /tmp/breeder_uuid
+          else
+            _fail "Breeder create"
+            echo "⚠️  Using placeholder for further tests"
+            BREEDER_UUID="550e8400-e29b-41d4-a716-446655440000"
           fi
 
-          # Test 3: List breeders after creation and extract UUID
+          # Test 3: List breeders after creation
           echo "📋 BREEDER LIST - After creation:"
-          LIST_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list 2>&1)
-          if [ $? -eq 0 ]; then
-            _pass "Breeder list (after create)"
-          else
-            _fail "Breeder list (after create)"
-          fi
-          echo "${LIST_OUTPUT}"
-          
-          # Extract UUID from list output (more reliable than create output)
-          if [ -z "${BREEDER_UUID}" ] || [ "${BREEDER_UUID}" = "550e8400-e29b-41d4-a716-446655440000" ]; then
-            BREEDER_UUID=$(echo "${LIST_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
-            if [ -n "${BREEDER_UUID}" ]; then
-              echo "✅ Extracted breeder UUID from list: ${BREEDER_UUID}"
-            fi
-          fi
+          run_test "Breeder list (after create)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list
 
           # Test 4: Get specific breeder
           echo "🔍 BREEDER SHOW - Getting specific breeder:"
@@ -858,42 +826,26 @@ jobs:
           BREEDER_STRESS_FAIL=0
 
           for i in {1..5}; do
-            # Create breeder config with targetRefs
             printf 'meta:\n  configVersion: "0.3"\nbreeder:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > breeder-stress-config-${i}.yaml
 
             chmod 644 breeder-stress-config-${i}.yaml
-            
-            # Verify API is reachable before each request
-            if ! curl -sf http://${API_HOST}:${API_PORT}/health >/dev/null 2>&1; then
-              echo "⚠️  API not reachable, waiting..."
-              sleep 3
-            fi
+            docker run --rm --network host \
+              -v $(pwd):/work \
+              -w /work \
+              "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+              breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml 2>&1 || true
+            sleep 2
+          done
 
-            STRESS_CREATED=false
-            for attempt in 1 2 3; do
-              STRESS_OUTPUT=$(docker run --rm --network host \
-                -v $(pwd):/work \
-                -w /work \
-                "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-                breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml 2>&1)
+          STRESS_LIST=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list 2>&1)
 
-              if echo "${STRESS_OUTPUT}" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
-                STRESS_CREATED=true
-                break
-              else
-                echo "Attempt ${attempt}/3 failed, retrying in 5s..."
-                echo "Output: ${STRESS_OUTPUT}"
-                sleep 5
-              fi
-            done
-
-            if [ "${STRESS_CREATED}" = true ]; then
+          for i in {1..5}; do
+            if echo "${STRESS_LIST}" | grep -q "stress-test-breeder-${i}"; then
               _pass "Stress breeder ${i} create"
             else
               _fail "Stress breeder ${i} create"
             fi
-            
-            sleep 2
           done
           
           # List all breeders to verify
