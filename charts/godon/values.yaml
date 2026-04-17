@@ -140,7 +140,7 @@ windmill:
 observer:
   image:
     repository: "ghcr.io/godon-dev/godon-observer"
-    tag: "0.2.1"
+    tag: "0.2.2"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
