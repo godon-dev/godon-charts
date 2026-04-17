@@ -97,3 +97,5 @@ observer:
     value: "yb-tservers.godon.svc.cluster.local"
   - name: GODON_ARCHIVE_DB_SERVICE_PORT
     value: "5433"
+  - name: GODON_API_URL
+    value: "http://godon-api:8080"
