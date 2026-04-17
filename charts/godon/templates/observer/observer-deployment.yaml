@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "godon.fullname" . }}-godon-observer
+  {{- if .Values.observer.annotations }}
+  annotations:
+    {{- toYaml .Values.observer.annotations | nindent 4 }}
+  {{- end }}
+  labels:
+    component: godon-observer
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+    {{- if .Values.observer.labels }}
+    {{- toYaml .Values.observer.labels | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.observer.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      component: godon-observer
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      annotations:
+      labels:
+        component:  godon-observer
+        release: {{ .Release.Name }}
+        {{- if .Values.observer.podLabels }}
+        {{- toYaml .Values.observer.podLabels | nindent 8 }}
+        {{- end }}
+    spec:
+      restartPolicy: Always
+      {{- if .Values.observer.image.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.observer.image.pullSecret }}
+      {{- end }}
+      serviceAccountName: {{ .Values.observer.serviceAccountName | default "" }}
+      containers:
+        - name:  godon-observer
+          {{- include "observer.image" . | indent 10 }}
+          args:
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - {{ .Values.observer.containerPort | quote }}
+          resources:
+            {{- toYaml .Values.observer.resources | nindent 12 }}
+          env:
+            {{- toYaml .Values.observer.env | nindent 12 }}
+          {{- if .Values.observer.livenessProbe.enabled }}
+          livenessProbe:
+            initialDelaySeconds: {{ .Values.observer.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.observer.livenessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.observer.livenessProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.observer.livenessProbe.timeoutSeconds }}
+          {{- end }}
+          volumeMounts:
+            {{- toYaml .Values.observer.volumeMounts | nindent 12 }}
+      volumes:
+        {{- toYaml .Values.observer.volumes | nindent 8 }}

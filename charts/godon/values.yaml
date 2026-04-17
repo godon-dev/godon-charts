@@ -135,12 +135,12 @@ windmill:
             memory: "512Mi"
 
 ########################################
-## Component | Godon Metrics Exporter
+## Component | Godon Observer
 ########################################
-metrics_exporter:
+observer:
   image:
-    repository: "ghcr.io/godon-dev/godon-metrics-exporter"
-    tag: "0.0.4"
+    repository: "ghcr.io/godon-dev/godon-observer"
+    tag: "0.1.0"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -164,6 +164,14 @@ metrics_exporter:
     value: "http://godon-prometheus-pushgateway:9091"
   - name: PUSH_METRICS_ENABLED
     value: "true"
+  - name: GODON_ARCHIVE_DB_USER
+    value: "yugabyte"
+  - name: GODON_ARCHIVE_DB_PASSWORD
+    value: "yugabyte"
+  - name: GODON_ARCHIVE_DB_SERVICE_HOST
+    value: "yb-tserver-0"
+  - name: GODON_ARCHIVE_DB_SERVICE_PORT
+    value: "5433"
 
   livenessProbe:
     enabled: false
