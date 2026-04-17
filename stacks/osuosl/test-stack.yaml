@@ -98,4 +98,4 @@ observer:
   - name: GODON_ARCHIVE_DB_SERVICE_PORT
     value: "5433"
   - name: GODON_API_URL
-    value: "http://godon-api:8080"
+    value: "http://godon-api:9090"
