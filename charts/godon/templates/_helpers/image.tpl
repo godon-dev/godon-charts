@@ -8,9 +8,9 @@ image: {{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}
 imagePullPolicy: {{ .Values.api.image.pullPolicy }}
 {{- end }}
 
-{{- define "metrics_exporter.image" }}
-image: {{ .Values.metrics_exporter.image.repository }}:{{ .Values.metrics_exporter.image.tag }}
-imagePullPolicy: {{ .Values.metrics_exporter.image.pullPolicy }}
+{{- define "observer.image" }}
+image: {{ .Values.observer.image.repository }}:{{ .Values.observer.image.tag }}
+imagePullPolicy: {{ .Values.observer.image.pullPolicy }}
 {{- end }}
 
 {{- define "mcp.image" }}

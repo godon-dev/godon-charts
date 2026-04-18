@@ -55,12 +55,12 @@ prometheus:
       enabled: true
     kubernetes-pods-slow:
       enabled: false
-    godon-metrics-exporter:
+    godon-observer:
       enabled: true
       scrape_interval: 5s
       static_configs:
         - targets:
-          - 'godon-metrics-exporter.godon.svc.cluster.local:9099'
+          - 'godon-godon-observer.godon.svc.cluster.local:9099'
 
   extraScrapeConfigs: |
 
@@ -244,7 +244,7 @@ promtail:
     snippets:
       pipelineStages:
         - match:
-            selector: '{component=~"api|metrics-exporter|seeder"}'
+            selector: '{component=~"api|godon-observer|seeder"}'
             action: keep
             stages:
               - {}

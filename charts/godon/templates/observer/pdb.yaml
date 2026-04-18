@@ -1,0 +1,16 @@
+{{- if .Values.observer.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "godon.fullname" . }}-godon-observer
+  labels:
+    component: godon-observer
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  minAvailable: {{ .Values.observer.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      component: godon-observer
+      release: {{ .Release.Name }}
+{{- end }}
