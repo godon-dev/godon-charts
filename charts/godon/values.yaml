@@ -87,7 +87,7 @@ windmill:
       # Breeder workers - handle long-running breeder optimization jobs
       # No timeout - continuous workers with crash recovery via Optuna DB
       - name: "breeder"
-        replicas: 5
+        replicas: 10
         extraEnv:
         - name: WORKER_GROUP
           value: "breeder"
@@ -122,7 +122,7 @@ windmill:
       # Default workers - handle any job without a specific tag
       # Picks up dependency resolution, untagged scripts, and general operations
       - name: "default"
-        replicas: 2
+        replicas: 3
         extraEnv:
         - name: WORKER_GROUP
           value: "default"
