@@ -38,7 +38,7 @@ godon_seeder:
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
   - name: CONTROLLER_VERSION
-    value: "0.35.0"
+    value: "0.36.0"
   - name: BREEDER_VERSION
     value: "0.39.0"
 
@@ -237,7 +237,7 @@ pushgateway:
 api:
   image:
     repository: "ghcr.io/godon-dev/godon-api"
-    tag: "0.0.22"
+    tag: "0.0.23"
     pullPolicy: IfNotPresent
     pullSecret: ""
 

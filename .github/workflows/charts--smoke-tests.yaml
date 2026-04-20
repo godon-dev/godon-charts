@@ -512,8 +512,50 @@ jobs:
           run_test "Breeder show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="${BREEDER_UUID}"
 
-          # Test 5: Update breeder — not implemented yet, skip
-          echo "⏭️  BREEDER UPDATE - Skipped (not implemented)"
+          # Test 5: Update breeder with compatible config
+          echo "📝 BREEDER UPDATE - Updating breeder config:"
+          cat > breeder-update-config.yaml << 'EOF'
+          meta:
+            configVersion: "0.3"
+          breeder:
+            type: linux_performance
+          run:
+            parallel: 1
+            completion:
+              iterations:
+                min: 20
+                max: 200
+          effectuation:
+            targetRefs:
+              - "PLACEHOLDER_TARGET_ID"
+          cooperation:
+            active: false
+          objectives:
+            - name: test_metric
+              goal: MINIMIZE
+              reconnaissance:
+                service: prometheus
+                query: "scalar(test_metric)"
+                stabilization_seconds: 5
+                samples: 2
+                interval: 1
+          settings:
+            sysctl:
+              vm.swappiness:
+                constraints:
+                  - step: 1
+                    lower: 0
+                    upper: 100
+          EOF
+
+          sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" breeder-update-config.yaml
+          chmod 644 breeder-update-config.yaml
+
+          run_test "Breeder update" docker run --rm --network host \
+            -v $(pwd):/work \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            breeder update --id="${BREEDER_UUID}" --file=breeder-update-config.yaml
 
           # Test 6: Delete breeder
           echo "🗑️  BREEDER PURGE - Deleting breeder (with force flag):"
