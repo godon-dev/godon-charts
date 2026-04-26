@@ -52,7 +52,7 @@ windmill:
     image: "ghcr.io/windmill-labs/windmill-full"
     appReplicas: 1
     lspReplicas: 1
-    databaseUrl: "postgres://windmill:windmill@windmill-db-primary:5432/windmill?sslmode=disable"
+    databaseUrl: "postgres://windmill:windmill@godon-windmill-db:5432/windmill?sslmode=disable"
     workerGroups:
       # Controller workers - handle fast operations (preflight, breeder_create, etc)
       # Timeout hierarchy: Script-level > Worker group DEFAULT_TIMEOUT_SECONDS > Global default
