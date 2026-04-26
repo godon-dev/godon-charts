@@ -333,20 +333,18 @@ metadata-db:
     repository: "postgres"
     tag: 16
     pullPolicy: IfNotPresent
+  postgresqlDataDir: "/var/lib/postgresql/data"
   auth:
     username: meta_data
     password: meta_data
     database: meta_data
 
   primary:
-    command:
-      - "postgres"
+    args:
       - "-c"
       - "max_connections=500"
       - "-c"
       - "shared_buffers=128MB"
-      - "-c"
-      - "effective_cache_size=512MB"
 
 ########################################
 ## Component | Postgres Database for Windmill
@@ -356,20 +354,18 @@ windmill-db:
     repository: "postgres"
     tag: 16
     pullPolicy: IfNotPresent
+  postgresqlDataDir: "/var/lib/postgresql/data"
   auth:
     username: windmill
     password: windmill
     database: windmill
 
   primary:
-    command:
-      - "postgres"
+    args:
       - "-c"
       - "max_connections=500"
       - "-c"
       - "shared_buffers=128MB"
-      - "-c"
-      - "effective_cache_size=512MB"
 
 ########################################
 ## Component | Knowledge Archive Database for Cooperating Config Breeders
