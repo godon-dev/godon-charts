@@ -329,10 +329,6 @@ mcp:
 ## Component | Postgres Database Storing Godon Components Meta Data
 ########################################
 metadata-db:
-  image:
-    repository: "postgres"
-    tag: 13
-    pullPolicy: IfNotPresent
   auth:
     username: meta_data
     password: meta_data
@@ -369,10 +365,6 @@ metadata-db:
 ## Component | Postgres Database for Windmill
 ########################################
 windmill-db:
-  image:
-    repository: "postgres"
-    tag: 14
-    pullPolicy: IfNotPresent
   auth:
     username: windmill
     password: windmill
