@@ -46,10 +46,13 @@ godon_seeder:
 ## Component | Windmill Workflow Orchestration Engine
 ########################################
 windmill:
+  postgresql:
+    enabled: false
   windmill:
     image: "ghcr.io/windmill-labs/windmill-full"
     appReplicas: 1
     lspReplicas: 1
+    databaseUrl: "postgres://windmill:windmill@windmill-db-primary:5432/windmill?sslmode=disable"
     workerGroups:
       # Controller workers - handle fast operations (preflight, breeder_create, etc)
       # Timeout hierarchy: Script-level > Worker group DEFAULT_TIMEOUT_SECONDS > Global default
@@ -361,6 +364,34 @@ metadata-db:
       work_mem: "2096kB"
       min_wal_size: "1GB"
       max_wal_size: "4GB"
+
+########################################
+## Component | Postgres Database for Windmill
+########################################
+windmill-db:
+  image:
+    repository: "postgres"
+    tag: 14
+    pullPolicy: IfNotPresent
+  auth:
+    username: windmill
+    password: windmill
+    database: windmill
+
+  primary:
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    initdb:
+      args: "-E UTF8"
+    extendedConf:
+      max_connections: "500"
+      shared_buffers: "128MB"
+      effective_cache_size: "512MB"
 
 ########################################
 ## Component | Knowledge Archive Database for Cooperating Config Breeders
