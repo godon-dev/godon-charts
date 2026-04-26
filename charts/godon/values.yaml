@@ -340,6 +340,10 @@ metadata-db:
     database: meta_data
 
   primary:
+    containerSecurityContext:
+      runAsUser: 999
+    podSecurityContext:
+      fsGroup: 999
     args:
       - "-c"
       - "max_connections=500"
@@ -361,6 +365,10 @@ windmill-db:
     database: windmill
 
   primary:
+    containerSecurityContext:
+      runAsUser: 999
+    podSecurityContext:
+      fsGroup: 999
     args:
       - "-c"
       - "max_connections=500"
