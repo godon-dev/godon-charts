@@ -329,10 +329,6 @@ mcp:
 ## Component | Postgres Database Storing Godon Components Meta Data
 ########################################
 metadata-db:
-  image:
-    repository: "postgres"
-    tag: 13
-    pullPolicy: IfNotPresent
   auth:
     username: meta_data
     password: meta_data
@@ -351,28 +347,24 @@ metadata-db:
         memory: "1Gi"
     initdb:
       args: "-E UTF8"
-    extendedConf:
-      max_connections: "500"
-      shared_buffers: "128MB"
-      effective_cache_size: "512MB"
-      maintenance_work_mem: "64MB"
-      checkpoint_completion_target: "0.9"
-      wal_buffers: "16MB"
-      default_statistics_target: "100"
-      random_page_cost: "1.1"
-      effective_io_concurrency: "200"
-      work_mem: "2096kB"
-      min_wal_size: "1GB"
-      max_wal_size: "4GB"
+    extendedConfiguration: |
+      max_connections = 500
+      shared_buffers = 128MB
+      effective_cache_size = 512MB
+      maintenance_work_mem = 64MB
+      checkpoint_completion_target = 0.9
+      wal_buffers = 16MB
+      default_statistics_target = 100
+      random_page_cost = 1.1
+      effective_io_concurrency = 200
+      work_mem = 2096kB
+      min_wal_size = 1GB
+      max_wal_size = 4GB
 
 ########################################
 ## Component | Postgres Database for Windmill
 ########################################
 windmill-db:
-  image:
-    repository: "postgres"
-    tag: 14
-    pullPolicy: IfNotPresent
   auth:
     username: windmill
     password: windmill
@@ -388,10 +380,10 @@ windmill-db:
         memory: "1Gi"
     initdb:
       args: "-E UTF8"
-    extendedConf:
-      max_connections: "500"
-      shared_buffers: "128MB"
-      effective_cache_size: "512MB"
+    extendedConfiguration: |
+      max_connections = 500
+      shared_buffers = 128MB
+      effective_cache_size = 512MB
 
 ########################################
 ## Component | Knowledge Archive Database for Cooperating Config Breeders
