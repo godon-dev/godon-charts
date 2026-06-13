@@ -1,7 +1,7 @@
 apiVersion: v2
 description: Helm Chart for godon optimizer stack
 name: godon
-version: 0.11.0
+version: 0.11.1
 appVersion: 0.0.6
 home: https://github.com/cherusk/godon-charts/godon
 maintainers:
@@ -44,6 +44,6 @@ dependencies:
     repository: https://prometheus-community.github.io/helm-charts
     condition: pushgateway.enabled
   - name: alloy
-    version: 0.11.0
+    version: 0.11.1
     repository: https://grafana.github.io/helm-charts
     condition: alloy.enabled
