@@ -40,7 +40,7 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.46.0"
   - name: BREEDER_VERSION
-    value: "0.98.0"
+    value: "0.99.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -96,6 +96,8 @@ windmill:
           value: "breeder"
         - name: WORKER_TAGS
           value: "breeder"
+        - name: GODON_DETECTION_DEBUG
+          value: "1"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://godon-observability-opentelemetry-collector.godon-observability.svc.cluster.local:4318"
         - name: OTEL_SERVICE_NAME
