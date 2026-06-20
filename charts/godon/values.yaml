@@ -389,7 +389,7 @@ archive-db:
 
   image:
     repository: "docker.io/yugabytedb/yugabyte"
-    tag: 2.18.1.0-b84
+    tag: 2025.2.3.2
     pullPolicy: IfNotPresent
 
   replicas:

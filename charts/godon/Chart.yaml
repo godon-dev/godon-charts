@@ -1,7 +1,7 @@
 apiVersion: v2
 description: Helm Chart for godon optimizer stack
 name: godon
-version: 0.15.0
+version: 0.16.0
 appVersion: 0.0.6
 home: https://github.com/cherusk/godon-charts/godon
 maintainers:
@@ -35,7 +35,7 @@ dependencies:
     repository: https://charts.bitnami.com/bitnami
     alias: windmill-db
   - name: yugabyte
-    version: 2.19.3
+    version: 2025.2.3
     repository: https://charts.yugabyte.com
     alias: archive-db
     condition: archive-db.enabled
