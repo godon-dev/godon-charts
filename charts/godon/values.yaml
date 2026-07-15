@@ -23,7 +23,7 @@ godon_seeder:
   enabled: true
   image:
     repository: ghcr.io/godon-dev/godon-seeder
-    tag: 0.0.21
+    tag: 0.0.22
     pullPolicy: IfNotPresent
     pullSecret: ""
   resources:
@@ -38,9 +38,9 @@ godon_seeder:
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
   - name: CONTROLLER_VERSION
-    value: "0.49.0"
+    value: "0.50.0"
   - name: BREEDER_VERSION
-    value: "0.123.0"
+    value: "0.124.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
