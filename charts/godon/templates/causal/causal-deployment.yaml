@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "godon.fullname" . }}-godon-causal
+  {{- if .Values.causal.annotations }}
+  annotations:
+    {{- toYaml .Values.causal.annotations | nindent 4 }}
+  {{- end }}
+  labels:
+    component: godon-causal
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+    {{- if .Values.causal.labels }}
+    {{- toYaml .Values.causal.labels | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.causal.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      component: godon-causal
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        component: godon-causal
+        release: {{ .Release.Name }}
+        {{- if .Values.causal.podLabels }}
+        {{- toYaml .Values.causal.podLabels | nindent 8 }}
+        {{- end }}
+    spec:
+      restartPolicy: Always
+      {{- if .Values.causal.image.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.causal.image.pullSecret }}
+      {{- end }}
+      serviceAccountName: {{ .Values.causal.serviceAccountName | default "" }}
+      containers:
+        - name: godon-causal
+          image: "{{ .Values.causal.image.repository }}:{{ .Values.causal.image.tag }}"
+          imagePullPolicy: {{ .Values.causal.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.causal.containerPort }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.causal.resources | nindent 12 }}
+          env:
+            {{- toYaml .Values.causal.env | nindent 12 }}
+          {{- if .Values.causal.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.causal.containerPort }}
+            initialDelaySeconds: {{ .Values.causal.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.causal.livenessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.causal.livenessProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.causal.livenessProbe.timeoutSeconds }}
+          {{- end }}
+          volumeMounts:
+            {{- toYaml .Values.causal.volumeMounts | nindent 12 }}
+      volumes:
+        {{- toYaml .Values.causal.volumes | nindent 8 }}

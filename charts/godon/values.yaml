@@ -179,6 +179,8 @@ observer:
     value: "5433"
   - name: GODON_API_URL
     value: "http://godon-api:9090"
+  - name: GODON_CAUSAL_URL
+    value: "http://godon-causal:9091"
 
   livenessProbe:
     enabled: false
@@ -196,6 +198,69 @@ observer:
   volumes: []
 
   volumeMounts: []
+
+########################################
+## Component | godon-causal
+########################################
+causal:
+  image:
+    repository: "ghcr.io/godon-dev/godon-causal"
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+    pullSecret: ""
+
+  replicas: 1
+
+  port: 9091
+  containerPort: 8091
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  env:
+  - name: HOST
+    value: "0.0.0.0"
+  - name: PORT
+    value: "8091"
+  - name: GODON_ARCHIVE_DB_USER
+    value: "yugabyte"
+  - name: GODON_ARCHIVE_DB_PASSWORD
+    value: "yugabyte"
+  - name: GODON_ARCHIVE_DB_SERVICE_HOST
+    value: "yb-tservers.godon.svc.cluster.local"
+  - name: GODON_ARCHIVE_DB_SERVICE_PORT
+    value: "5433"
+  - name: GODON_DETECTION_CONFIDENCE
+    value: "0.95"
+
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    failureThreshold: 3
+    timeoutSeconds: 5
+
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+  annotations: {}
+
+  podLabels: {}
+
+  serviceAccountName: ""
+
+  volumes: []
+
+  volumeMounts: []
+
+  service:
+    annotations: {}
 
 ########################################
 ## Component | Prometheus Push Gateway
