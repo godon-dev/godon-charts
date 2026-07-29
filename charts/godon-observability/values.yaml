@@ -143,18 +143,6 @@ loki:
       max_query_length: 721h
       max_query_parallelism: 32
       allow_structured_metadata: true
-      otlp_config:
-        resource_attributes:
-          activity_attributes:
-            - service.name
-            - service.instance.id
-          log_attributes:
-            - service.name
-            - service.instance.id
-          span_attributes:
-            - service.name
-            - service.instance.id
-
   singleBinary:
     replicas: 1
     resources:
