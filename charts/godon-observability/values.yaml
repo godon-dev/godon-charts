@@ -127,10 +127,6 @@ loki:
     auth_enabled: false
     commonConfig:
       replication_factor: 1
-      ring:
-        instance_addr: 127.0.0.1
-        kvstore:
-          store: inmemory
     storage:
       type: filesystem
     schemaConfig:
@@ -148,9 +144,11 @@ loki:
       max_query_parallelism: 32
       allow_structured_metadata: true
     frontend:
-      scheduler_address: ""
+      scheduler_address: localhost:9095
     frontend_worker:
-      scheduler_address: "localhost:9095"
+      scheduler_address: localhost:9095
+    memberlist:
+      join_members: []
   singleBinary:
     replicas: 1
     resources:
