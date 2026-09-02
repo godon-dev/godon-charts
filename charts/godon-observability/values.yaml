@@ -143,6 +143,9 @@ loki:
       max_query_length: 721h
       max_query_parallelism: 32
       allow_structured_metadata: true
+    compactor:
+      retention_enabled: true
+      delete_request_store: filesystem
     frontend:
       scheduler_address: localhost:9095
     frontend_worker:
@@ -154,10 +157,10 @@ loki:
     resources:
       requests:
         cpu: 100m
-        memory: 256Mi
+        memory: 1Gi
       limits:
-        cpu: 500m
-        memory: 512Mi
+        cpu: 1
+        memory: 2Gi
 
   backend:
     replicas: 0
@@ -167,7 +170,8 @@ loki:
     replicas: 0
 
   persistence:
-    enabled: false
+    enabled: true
+    size: 20Gi
   test:
     enabled: false
   monitoring:

@@ -1,7 +1,7 @@
 apiVersion: v2
 name: godon-observability
 description: Observability stack for godon (Prometheus + OTel Collector + Loki + Grafana)
-version: 0.3.0
+version: 0.4.0
 appVersion: "1.0"
 maintainers:
   - name: cherusk
