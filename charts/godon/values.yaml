@@ -40,7 +40,7 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.54.0"
   - name: BREEDER_VERSION
-    value: "0.161.0"
+    value: "0.162.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -207,7 +207,7 @@ observer:
 causal:
   image:
     repository: "ghcr.io/godon-dev/godon-causal"
-    tag: "0.17.0"
+    tag: "0.18.0"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
