@@ -39,7 +39,7 @@ godon_seeder:
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
   - name: CONTROLLER_VERSION
     value: "0.54.0"
-  - name: BREEDER_VERSION
+  - name: ROBOT_VERSION
     value: "0.163.3"
 
 ########################################
@@ -54,7 +54,7 @@ windmill:
     lspReplicas: 1
     databaseUrl: "postgres://windmill:windmill@godon-windmill-db:5432/windmill?sslmode=disable"
     workerGroups:
-      # Controller workers - handle fast operations (preflight, breeder_create, etc)
+      # Controller workers - handle fast operations (preflight, robot_create, etc)
       # Timeout hierarchy: Script-level > Worker group DEFAULT_TIMEOUT_SECONDS > Global default
       - name: "controller"
         replicas: 3
@@ -87,15 +87,15 @@ windmill:
             cpu: "500m"
             memory: "512Mi"
 
-      # Breeder workers - handle long-running breeder optimization jobs
+      # Robot workers - handle long-running robot optimization jobs
       # No timeout - continuous workers with crash recovery via Optuna DB
-      - name: "breeder"
+      - name: "robot"
         replicas: 10
         extraEnv:
         - name: WORKER_GROUP
-          value: "breeder"
+          value: "robot"
         - name: WORKER_TAGS
-          value: "breeder"
+          value: "robot"
         - name: GODON_DETECTION_DEBUG
           value: "1"
         - name: GODON_CAUSAL_URL
@@ -103,7 +103,7 @@ windmill:
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://godon-observability-opentelemetry-collector.godon-observability.svc.cluster.local:4318"
         - name: OTEL_SERVICE_NAME
-          value: "godon-breeders"
+          value: "godon-robots"
         - name: GODON_ARCHIVE_DB_SERVICE_HOST
           value: "yb-tservers.godon.svc.cluster.local"
         - name: GODON_ARCHIVE_DB_SERVICE_PORT
@@ -445,7 +445,7 @@ windmill-db:
       - "shared_buffers=128MB"
 
 ########################################
-## Component | Knowledge Archive Database for Cooperating Config Breeders
+## Component | Knowledge Archive Database for Cooperating Config Robots
 ########################################
 archive-db:
 

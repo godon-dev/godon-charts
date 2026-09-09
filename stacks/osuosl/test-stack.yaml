@@ -20,7 +20,7 @@ windmill:
       tag: "14"
 
 ########################################
-## Component | Knowledge Archive Database for Cooperating Config Breeders
+## Component | Knowledge Archive Database for Cooperating Config Robots
 ########################################
 archive-db:
   # Enable archive database for test stack

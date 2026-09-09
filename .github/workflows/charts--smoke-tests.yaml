@@ -138,11 +138,11 @@ jobs:
             description: "Test target for smoke testing"
           EOF
 
-          # Create test breeder config - uses targetRefs (targets must be created first)
-          cat > /tmp/breeder-test-config.yaml << 'EOF'
+          # Create test robot config - uses targetRefs (targets must be created first)
+          cat > /tmp/robot-test-config.yaml << 'EOF'
           meta:
             configVersion: "0.3"
-          breeder:
+          robot:
             type: linux_performance
           run:
             parallel: 1
@@ -171,13 +171,13 @@ jobs:
           EOF
 
           echo "📝 DEBUG: Verifying created config file:"
-          cat /tmp/breeder-test-config.yaml
+          cat /tmp/robot-test-config.yaml
           
-          # Create test breeder update config
-          cat > /tmp/breeder-update-config.yaml << 'EOF'
+          # Create test robot update config
+          cat > /tmp/robot-update-config.yaml << 'EOF'
           uuid: "PLACEHOLDER_UUID"
-          name: "updated-smoke-test-breeder"
-          description: "Updated breeder during smoke testing"
+          name: "updated-smoke-test-robot"
+          description: "Updated robot during smoke testing"
           config: >
             {
               "test_parameter": "updated_value",
@@ -391,29 +391,29 @@ jobs:
 
           echo "✅ TARGET adversarial operations completed"
 
-      - name: BREEDER Endpoint Tests - Regular Operations
+      - name: ROBOT Endpoint Tests - Regular Operations
         run: |
           set +e
           source /tmp/smoke-test-helpers.sh
-          echo "🔬 Testing BREEDER endpoints - Regular Operations"
+          echo "🔬 Testing ROBOT endpoints - Regular Operations"
           echo "===================================================="
 
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
           API_HOST="${{ env.API_HOST }}"
           API_PORT="${{ env.API_PORT }}"
 
-          # Test 1: List breeders (should be empty or return existing)
-          echo "📋 BREEDER LIST - Initial state:"
-          run_test "Breeder list (initial)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list
+          # Test 1: List robots (should be empty or return existing)
+          echo "📋 ROBOT LIST - Initial state:"
+          run_test "Robot list (initial)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot list
 
-          # Create a target for the breeder config (breeder configs require targetRefs)
-          echo "🎯 Creating target for breeder config..."
+          # Create a target for the robot config (robot configs require targetRefs)
+          echo "🎯 Creating target for robot config..."
           TARGET_ID=$(cat /tmp/target_id 2>/dev/null || echo "")
 
           # Create fallback target config at top level (heredoc works here)
-          cat > breeder-target-config.yaml << 'EOF'
-          name: "breeder-test-target"
+          cat > robot-target-config.yaml << 'EOF'
+          name: "robot-test-target"
           targetType: "ssh"
           spec:
             address: "10.0.0.1"
@@ -422,12 +422,12 @@ jobs:
 
           if [ -z "${TARGET_ID}" ] || [ "${TARGET_ID}" = "00000000-0000-4000-8000-000000000001" ]; then
             echo "⚠️  No valid target from previous tests, creating one now..."
-            chmod 644 breeder-target-config.yaml
+            chmod 644 robot-target-config.yaml
             TARGET_CREATE_OUTPUT=$(docker run --rm --network host \
               -v $(pwd):/work:ro \
               -w /work \
               "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              target create --file=breeder-target-config.yaml 2>&1)
+              target create --file=robot-target-config.yaml 2>&1)
             if [ $? -eq 0 ]; then
               _pass "Fallback target create"
             else
@@ -435,20 +435,20 @@ jobs:
             fi
             TARGET_ID=$(echo "${TARGET_CREATE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
             if [ -z "${TARGET_ID}" ]; then
-              TARGET_ID=$(curl -s http://${API_HOST}:${API_PORT}/targets | jq -r '[.[] | select(.name=="breeder-test-target") | .id][0]' 2>/dev/null || echo "")
+              TARGET_ID=$(curl -s http://${API_HOST}:${API_PORT}/targets | jq -r '[.[] | select(.name=="robot-test-target") | .id][0]' 2>/dev/null || echo "")
             fi
           fi
 
           echo "Using target ID: ${TARGET_ID}"
 
-          # Test 2: Create a new breeder using local config with targetRefs
-          echo "🔨 BREEDER CREATE - Creating test breeder:"
+          # Test 2: Create a new robot using local config with targetRefs
+          echo "🔨 ROBOT CREATE - Creating test robot:"
 
           # Heredoc at top level - use PLACEHOLDER, then sed to inject TARGET_ID
-          cat > breeder-smoke-config.yaml << 'EOF'
+          cat > robot-smoke-config.yaml << 'EOF'
           meta:
             configVersion: "0.3"
-          breeder:
+          robot:
             type: linux_performance
           run:
             parallel: 1
@@ -479,45 +479,45 @@ jobs:
                     upper: 100
           EOF
 
-          sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" breeder-smoke-config.yaml
-          chmod 644 breeder-smoke-config.yaml
+          sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" robot-smoke-config.yaml
+          chmod 644 robot-smoke-config.yaml
 
           docker run --rm --network host \
             -v $(pwd):/work \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="smoke-test-breeder" --file=breeder-smoke-config.yaml 2>&1 || true
+            robot create --name="smoke-test-robot" --file=robot-smoke-config.yaml 2>&1 || true
 
-          BREEDER_UUID=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list 2>&1 \
+          ROBOT_UUID=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot list 2>&1 \
             | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
 
-          if [ -n "${BREEDER_UUID}" ]; then
-            _pass "Breeder create"
-            echo "✅ Breeder created with UUID: ${BREEDER_UUID}"
-            echo "${BREEDER_UUID}" > /tmp/breeder_uuid
+          if [ -n "${ROBOT_UUID}" ]; then
+            _pass "Robot create"
+            echo "✅ Robot created with UUID: ${ROBOT_UUID}"
+            echo "${ROBOT_UUID}" > /tmp/robot_uuid
           else
-            _fail "Breeder create"
+            _fail "Robot create"
             echo "⚠️  Using placeholder for further tests"
-            BREEDER_UUID="550e8400-e29b-41d4-a716-446655440000"
+            ROBOT_UUID="550e8400-e29b-41d4-a716-446655440000"
           fi
 
-          # Test 3: List breeders after creation
-          echo "📋 BREEDER LIST - After creation:"
-          run_test "Breeder list (after create)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list
+          # Test 3: List robots after creation
+          echo "📋 ROBOT LIST - After creation:"
+          run_test "Robot list (after create)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot list
 
-          # Test 4: Get specific breeder
-          echo "🔍 BREEDER SHOW - Getting specific breeder:"
-          run_test "Breeder show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="${BREEDER_UUID}"
+          # Test 4: Get specific robot
+          echo "🔍 ROBOT SHOW - Getting specific robot:"
+          run_test "Robot show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot show --id="${ROBOT_UUID}"
 
-          # Test 5: Update breeder with compatible config
-          echo "📝 BREEDER UPDATE - Updating breeder config:"
-          cat > breeder-update-config.yaml << 'EOF'
+          # Test 5: Update robot with compatible config
+          echo "📝 ROBOT UPDATE - Updating robot config:"
+          cat > robot-update-config.yaml << 'EOF'
           meta:
             configVersion: "0.3"
-          breeder:
+          robot:
             type: linux_performance
           run:
             parallel: 1
@@ -548,28 +548,28 @@ jobs:
                     upper: 100
           EOF
 
-          sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" breeder-update-config.yaml
-          chmod 644 breeder-update-config.yaml
+          sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" robot-update-config.yaml
+          chmod 644 robot-update-config.yaml
 
-          run_test "Breeder update" docker run --rm --network host \
+          run_test "Robot update" docker run --rm --network host \
             -v $(pwd):/work \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder update --id="${BREEDER_UUID}" --file=breeder-update-config.yaml
+            robot update --id="${ROBOT_UUID}" --file=robot-update-config.yaml
 
-          # Test 6: Delete breeder
-          echo "🗑️  BREEDER PURGE - Deleting breeder (with force flag):"
-          run_test "Breeder purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --force --id="${BREEDER_UUID}"
+          # Test 6: Delete robot
+          echo "🗑️  ROBOT PURGE - Deleting robot (with force flag):"
+          run_test "Robot purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot purge --force --id="${ROBOT_UUID}"
 
-          # Test 7: List breeders after deletion
-          echo "📋 BREEDER LIST - After deletion:"
-          run_test "Breeder list (after delete)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list
+          # Test 7: List robots after deletion
+          echo "📋 ROBOT LIST - After deletion:"
+          run_test "Robot list (after delete)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot list
 
-      - name: BREEDER Endpoint Tests - Adversarial Operations
+      - name: ROBOT Endpoint Tests - Adversarial Operations
         run: |
-          echo "🚨 Testing BREEDER endpoints - Adversarial Operations"
+          echo "🚨 Testing ROBOT endpoints - Adversarial Operations"
           echo "========================================================"
 
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
@@ -578,11 +578,11 @@ jobs:
 
           # Create all test config files first
           echo "Creating test config files..."
-          printf 'malformed: yaml content\ninvalid:\n' > malformed-breeder-config.yaml
+          printf 'malformed: yaml content\ninvalid:\n' > malformed-robot-config.yaml
 
-          printf 'meta:\n  configVersion: "0.3"\nsettings:\n  test: value\n' > special-chars-breeder-config.yaml
+          printf 'meta:\n  configVersion: "0.3"\nsettings:\n  test: value\n' > special-chars-robot-config.yaml
 
-          printf 'meta:\n  configVersion: "0.3"\nsettings:\n  test: value\n' > unicode-breeder-config.yaml
+          printf 'meta:\n  configVersion: "0.3"\nsettings:\n  test: value\n' > unicode-robot-config.yaml
 
           # Fix permissions to ensure container can read them
           chmod 644 *.yaml
@@ -593,75 +593,75 @@ jobs:
           echo "📝 DEBUG: Current directory: $(pwd)"
 
           # Test 1: Invalid UUID format
-          echo "🧪 TEST: BREEDER SHOW with invalid UUID format (should reject):"
+          echo "🧪 TEST: ROBOT SHOW with invalid UUID format (should reject):"
           if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="invalid-uuid-format" 2>&1; then
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot show --id="invalid-uuid-format" 2>&1; then
             echo "❌ FAIL: Should have rejected invalid UUID format"
           else
             echo "✅ PASS: Invalid UUID format properly rejected"
           fi
 
-          # Test 2: Non-existent breeder
-          echo "🧪 TEST: BREEDER SHOW with non-existent UUID (should return error):"
+          # Test 2: Non-existent robot
+          echo "🧪 TEST: ROBOT SHOW with non-existent UUID (should return error):"
           if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder show --id="00000000-0000-4000-8000-000000000000" 2>&1; then
-            echo "❌ FAIL: Should have returned error for non-existent breeder"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot show --id="00000000-0000-4000-8000-000000000000" 2>&1; then
+            echo "❌ FAIL: Should have returned error for non-existent robot"
           else
-            echo "✅ PASS: Non-existent breeder properly handled"
+            echo "✅ PASS: Non-existent robot properly handled"
           fi
 
-          # Test 3: Delete non-existent breeder
-          echo "🧪 TEST: BREEDER PURGE with non-existent UUID (should return error):"
+          # Test 3: Delete non-existent robot
+          echo "🧪 TEST: ROBOT PURGE with non-existent UUID (should return error):"
           if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="99999999-9999-4999-9999-999999999999" 2>&1; then
-            echo "❌ FAIL: Should have returned error for non-existent breeder"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot purge --id="99999999-9999-4999-9999-999999999999" 2>&1; then
+            echo "❌ FAIL: Should have returned error for non-existent robot"
           else
-            echo "✅ PASS: Non-existent breeder deletion properly handled"
+            echo "✅ PASS: Non-existent robot deletion properly handled"
           fi
 
-          # Test 4: Malformed breeder config
-          echo "🧪 TEST: BREEDER CREATE with malformed config (should reject):"
+          # Test 4: Malformed robot config
+          echo "🧪 TEST: ROBOT CREATE with malformed config (should reject):"
           echo "📝 DEBUG: Mounting $(pwd) to /work"
           if docker run --rm --network host \
             -v $(pwd):/work \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="malformed" --file=malformed-breeder-config.yaml 2>&1; then
+            robot create --name="malformed" --file=malformed-robot-config.yaml 2>&1; then
             echo "❌ FAIL: Should have rejected malformed config"
           else
             echo "✅ PASS: Malformed config properly rejected"
           fi
           
-          # Test 5: Breeder name with special characters
-          echo "🧪 TEST: BREEDER CREATE with special characters in name:"
+          # Test 5: Robot name with special characters
+          echo "🧪 TEST: ROBOT CREATE with special characters in name:"
           if docker run --rm --network host \
             -v $(pwd):/work \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="test-breeder-with-special-chars" --file=special-chars-breeder-config.yaml 2>&1; then
+            robot create --name="test-robot-with-special-chars" --file=special-chars-robot-config.yaml 2>&1; then
             echo "✅ PASS: Special characters accepted"
           else
             echo "✅ PASS: Special characters handled or rejected (both acceptable)"
           fi
 
-          # Test 6: Unicode breeder name
-          echo "🧪 TEST: BREEDER CREATE with unicode characters in name:"
+          # Test 6: Unicode robot name
+          echo "🧪 TEST: ROBOT CREATE with unicode characters in name:"
           if docker run --rm --network host \
             -v $(pwd):/work \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            breeder create --name="test-breeder-unicode-🚀-测试" --file=unicode-breeder-config.yaml 2>&1; then
+            robot create --name="test-robot-unicode-🚀-测试" --file=unicode-robot-config.yaml 2>&1; then
             echo "✅ PASS: Unicode characters accepted"
           else
             echo "✅ PASS: Unicode characters handled or rejected (both acceptable)"
           fi
           
-          # Test 7: Empty breeder list scenario
-          echo "📋 BREEDER LIST - Verify empty list handling:"
+          # Test 7: Empty robot list scenario
+          echo "📋 ROBOT LIST - Verify empty list handling:"
           docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list || echo "✅ Empty list handled"
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot list || echo "✅ Empty list handled"
           
-          echo "✅ BREEDER adversarial operations completed"
+          echo "✅ ROBOT adversarial operations completed"
 
       - name: CREDENTIAL Endpoint Tests - Regular Operations
         run: |
@@ -853,47 +853,47 @@ jobs:
           API_HOST="${{ env.API_HOST }}"
           API_PORT="${{ env.API_PORT }}"
           
-          # Create multiple breeders in succession
-          echo "🔨 Creating multiple breeders..."
+          # Create multiple robots in succession
+          echo "🔨 Creating multiple robots..."
           
-          # Get a target ID for breeder configs
+          # Get a target ID for robot configs
           TARGET_ID=$(cat /tmp/target_id 2>/dev/null || echo "")
           if [ -z "${TARGET_ID}" ]; then
             echo "⚠️  No target ID available, fetching from API..."
             TARGET_ID=$(curl -s http://${API_HOST}:${API_PORT}/targets | jq -r '[.[] | .id][0]' 2>/dev/null || echo "")
           fi
-          echo "Using target ID for stress test breeders: ${TARGET_ID}"
+          echo "Using target ID for stress test robots: ${TARGET_ID}"
 
-          BREEDER_STRESS_PASS=0
-          BREEDER_STRESS_FAIL=0
+          ROBOT_STRESS_PASS=0
+          ROBOT_STRESS_FAIL=0
 
           for i in {1..5}; do
-            printf 'meta:\n  configVersion: "0.3"\nbreeder:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > breeder-stress-config-${i}.yaml
+            printf 'meta:\n  configVersion: "0.3"\nrobot:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > robot-stress-config-${i}.yaml
 
-            chmod 644 breeder-stress-config-${i}.yaml
+            chmod 644 robot-stress-config-${i}.yaml
             docker run --rm --network host \
               -v $(pwd):/work \
               -w /work \
               "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              breeder create --name="stress-test-breeder-${i}" --file=breeder-stress-config-${i}.yaml 2>&1 || true
+              robot create --name="stress-test-robot-${i}" --file=robot-stress-config-${i}.yaml 2>&1 || true
             sleep 2
           done
 
           STRESS_LIST=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list 2>&1)
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot list 2>&1)
 
           for i in {1..5}; do
-            if echo "${STRESS_LIST}" | grep -q "stress-test-breeder-${i}"; then
-              _pass "Stress breeder ${i} create"
+            if echo "${STRESS_LIST}" | grep -q "stress-test-robot-${i}"; then
+              _pass "Stress robot ${i} create"
             else
-              _fail "Stress breeder ${i} create"
+              _fail "Stress robot ${i} create"
             fi
           done
           
-          # List all breeders to verify
-          echo "📋 Listing all breeders after stress test:"
-          run_test "Breeder list (post-stress)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list
+          # List all robots to verify
+          echo "📋 Listing all robots after stress test:"
+          run_test "Robot list (post-stress)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot list
           
           # Create multiple credentials in succession
           echo "🔨 Creating multiple credentials..."
@@ -976,17 +976,17 @@ jobs:
           API_HOST="${{ env.API_HOST }}"
           API_PORT="${{ env.API_PORT }}"
           
-          # Get list of breeders and clean up test data
-          echo "Cleaning up test breeders..."
-          BREEDER_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure breeder list 2>/dev/null || echo "[]")
+          # Get list of robots and clean up test data
+          echo "Cleaning up test robots..."
+          ROBOT_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure robot list 2>/dev/null || echo "[]")
           
-          # Extract UUIDs of test breeders (those containing "stress-test" or "smoke-test")
-          echo "${BREEDER_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test")) | .id' 2>/dev/null | while read UUID; do
+          # Extract UUIDs of test robots (those containing "stress-test" or "smoke-test")
+          echo "${ROBOT_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test")) | .id' 2>/dev/null | while read UUID; do
             if [ -n "${UUID}" ]; then
-              echo "Deleting breeder: ${UUID}"
+              echo "Deleting robot: ${UUID}"
               docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-                --hostname=${API_HOST} --port=${API_PORT} --insecure breeder purge --id="${UUID}" || echo "Failed to delete ${UUID}"
+                --hostname=${API_HOST} --port=${API_PORT} --insecure robot purge --id="${UUID}" || echo "Failed to delete ${UUID}"
             fi
           done
           
@@ -996,7 +996,7 @@ jobs:
             --hostname=${API_HOST} --port=${API_PORT} --insecure credential list 2>/dev/null || echo "[]")
           
           # Extract IDs of test credentials
-          echo "${CRED_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test") or contains("breeder-test")) | .id' 2>/dev/null | while read ID; do
+          echo "${CRED_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test") or contains("robot-test")) | .id' 2>/dev/null | while read ID; do
             if [ -n "${ID}" ]; then
               echo "Deleting credential: ${ID}"
               docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
@@ -1009,7 +1009,7 @@ jobs:
           TARGET_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure target list 2>/dev/null || echo "[]")
           
-          echo "${TARGET_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test") or contains("breeder-test")) | .id' 2>/dev/null | while read ID; do
+          echo "${TARGET_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test") or contains("robot-test")) | .id' 2>/dev/null | while read ID; do
             if [ -n "${ID}" ]; then
               echo "Deleting target: ${ID}"
               docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
@@ -1031,8 +1031,8 @@ jobs:
           echo "  🏥 Health & Root Endpoints"
           echo "  🎯 TARGET Regular Operations (create, read, list)"
           echo "  🚨 TARGET Adversarial Operations (invalid inputs, edge cases)"
-          echo "  🔬 BREEDER Regular Operations (create, read, update, delete)"
-          echo "  🚨 BREEDER Adversarial Operations (invalid inputs, edge cases)"
+          echo "  🔬 ROBOT Regular Operations (create, read, update, delete)"
+          echo "  🚨 ROBOT Adversarial Operations (invalid inputs, edge cases)"
           echo "  🔐 CREDENTIAL Regular Operations (create, read, delete)"
           echo "  🚨 CREDENTIAL Adversarial Operations (invalid inputs, edge cases)"
           echo "  🔄 Integration Stress Test (multiple concurrent operations)"
@@ -1045,18 +1045,18 @@ jobs:
           echo "  POST   /targets"
           echo "  GET    /targets/{id}"
           echo "  DELETE /targets/{id}"
-          echo "  GET    /breeders"
-          echo "  POST   /breeders"
-          echo "  GET    /breeders/{uuid}"
-          echo "  PUT    /breeders/{uuid}"
-          echo "  DELETE /breeders/{uuid}"
+          echo "  GET    /robots"
+          echo "  POST   /robots"
+          echo "  GET    /robots/{uuid}"
+          echo "  PUT    /robots/{uuid}"
+          echo "  DELETE /robots/{uuid}"
           echo "  GET    /credentials"
           echo "  POST   /credentials"
           echo "  GET    /credentials/{credential_id}"
           echo "  DELETE /credentials/{credential_id}"
           echo ""
           echo "Test Scenarios:"
-          echo "  ✅ Valid CRUD operations (breeders, credentials, targets)"
+          echo "  ✅ Valid CRUD operations (robots, credentials, targets)"
           echo "  ✅ Invalid UUID format handling"
           echo "  ✅ Non-existent resource handling"
           echo "  ✅ Malformed data rejection"
