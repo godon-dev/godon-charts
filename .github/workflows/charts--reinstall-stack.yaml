@@ -99,7 +99,7 @@ jobs:
           helm install godon-observability ./charts/godon-observability/ \
                --dependency-update \
                --create-namespace --namespace godon-observability \
-               --wait=false --timeout 5m
+               --wait=false --timeout 15m
 
       - name: Deploy Godon Stack
         env:
@@ -110,7 +110,7 @@ jobs:
                --dependency-update \
                --create-namespace --namespace godon \
                --values ./stacks/osuosl/test-stack.yaml \
-               --wait=false --timeout 5m
+               --wait=false --timeout 15m
 
       - name: Verify Deployment Readiness
         env:
