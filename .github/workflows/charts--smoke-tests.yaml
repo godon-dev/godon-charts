@@ -898,7 +898,7 @@ jobs:
           # Create multiple credentials in succession
           echo "🔨 Creating multiple credentials..."
           for i in {1..3}; do
-            printf 'name: "stress-test-cred-%d"\ncredentialType: "ssh_private_key"\ncontent: "-----BEGIN RSA PRIVATE KEY----- test key -----END RSA PRIVATE KEY-----"\n' $i > credential-stress-config-${i}.yaml
+            printf 'name: "stress-test-cred-%d-%s"\ncredentialType: "ssh_private_key"\ncontent: "-----BEGIN RSA PRIVATE KEY----- test key -----END RSA PRIVATE KEY-----"\n' $i "${GITHUB_RUN_ID}" > credential-stress-config-${i}.yaml
 
             chmod 644 credential-stress-config-${i}.yaml
 
