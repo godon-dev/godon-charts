@@ -41,6 +41,12 @@ godon_seeder:
     value: "0.55.0"
   - name: ROBOT_VERSION
     value: "0.164.0"
+  # Fresh-Windmill boot tolerance: first boot runs DB migrations
+  # before the auth endpoint answers; give the seeder ~10 minutes.
+  - name: SEEDER_MAX_RETRIES
+    value: "60"
+  - name: SEEDER_RETRY_DELAY
+    value: "10"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
