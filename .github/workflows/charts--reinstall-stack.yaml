@@ -108,7 +108,7 @@ jobs:
           echo "🚀 Deploying Godon stack..."
           helm install godon ./charts/godon/ \
                --dependency-update \
-               --namespace godon \
+               --create-namespace --namespace godon \
                --values ./stacks/osuosl/test-stack.yaml \
                --wait=false --timeout 5m
 
