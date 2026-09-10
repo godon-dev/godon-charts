@@ -23,7 +23,7 @@ godon_seeder:
   enabled: true
   image:
     repository: ghcr.io/godon-dev/godon-seeder
-    tag: 0.0.22
+    tag: 0.0.23
     pullPolicy: IfNotPresent
     pullSecret: ""
   resources:
@@ -40,7 +40,7 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.54.0"
   - name: ROBOT_VERSION
-    value: "0.163.3"
+    value: "0.164.0"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -147,7 +147,7 @@ windmill:
 observer:
   image:
     repository: "ghcr.io/godon-dev/godon-observer"
-    tag: "0.70.0"
+    tag: "0.71.0"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -309,7 +309,7 @@ pushgateway:
 api:
   image:
     repository: "ghcr.io/godon-dev/godon-api"
-    tag: "0.0.23"
+    tag: "0.0.24"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -352,7 +352,7 @@ api:
 mcp:
   image:
     repository: "ghcr.io/godon-dev/godon-mcp"
-    tag: "0.0.4"
+    tag: "0.0.5"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
