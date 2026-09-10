@@ -40,7 +40,7 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.55.0"
   - name: ROBOT_VERSION
-    value: "0.164.0"
+    value: "0.164.1"
   # Fresh-Windmill boot tolerance: first boot runs DB migrations
   # before the auth endpoint answers; give the seeder ~10 minutes.
   - name: SEEDER_MAX_RETRIES
@@ -101,7 +101,7 @@ windmill:
         - name: WORKER_GROUP
           value: "robot"
         - name: WORKER_TAGS
-          value: "robot"
+          value: "robot,systemtender"
         - name: GODON_DETECTION_DEBUG
           value: "1"
         - name: GODON_CAUSAL_URL
