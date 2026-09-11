@@ -116,7 +116,7 @@ jobs:
           echo "🔗 Setting up port forward to godon-causal..."
           CAUSAL_POD=$(kubectl get pods -n godon -l component=godon-causal -o jsonpath='{.items[0].metadata.name}')
           echo "📦 Causal Pod: ${CAUSAL_POD}"
-          kubectl port-forward -n godon --address 127.0.0.3 "${CAUSAL_POD}" 9091:9091 > /tmp/pf_causal.log 2>&1 &
+          kubectl port-forward -n godon --address 127.0.0.3 "${CAUSAL_POD}" 9091:8091 > /tmp/pf_causal.log 2>&1 &
           echo $! > /tmp/pf_causal_pid
           sleep 3
           curl -s -f --connect-timeout 2 http://127.0.0.3:9091/health >/dev/null 2>&1 \
