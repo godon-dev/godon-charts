@@ -105,7 +105,7 @@ windmill:
         - name: GODON_DETECTION_DEBUG
           value: "1"
         - name: GODON_CAUSAL_URL
-          value: "http://godon-godon-causal:9091"
+          value: "http://godon-causal:9091"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://godon-observability-opentelemetry-collector.godon-observability.svc.cluster.local:4318"
         - name: OTEL_SERVICE_NAME
@@ -334,6 +334,8 @@ api:
   env:
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
+  - name: GODON_CAUSAL_URL
+    value: "http://godon-causal:9091"
 
   livenessProbe:
     enabled: false
@@ -380,6 +382,10 @@ mcp:
     value: "godon-api.godon.svc.cluster.local"
   - name: GODON_API_PORT
     value: "9090"
+  - name: GODON_CAUSAL_HOSTNAME
+    value: "godon-godon-causal"
+  - name: GODON_CAUSAL_PORT
+    value: "9091"
   - name: PORT
     value: "3001"
 
