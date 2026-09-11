@@ -263,6 +263,7 @@ jobs:
           echo "=================================================================="
 
           API_URL="http://${{ env.API_HOST }}:${{ env.API_PORT }}"
+          CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
 
           # ── Minimal real seed ────────────────────────────────────────
           # The map renders the constellation as it IS. Two real probe
