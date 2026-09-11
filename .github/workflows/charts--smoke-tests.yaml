@@ -287,11 +287,13 @@ jobs:
           cat > seed-artifact.json << 'EOF'
           {"nodes":[{"id":"probe-node-a","label":"probe node a"},{"id":"probe-node-b","label":"probe node b"}],"edges":[]}
           EOF
-          curl -sf -X POST ${CAUSAL_URL}/artifact -H 'Content-Type: application/json' -d @seed-artifact.json || true
+          UPLOAD_RESP=$(curl -s -X POST ${CAUSAL_URL}/artifact -H 'Content-Type: application/json' -d @seed-artifact.json) || true
+          echo "📤 artifact upload said: ${UPLOAD_RESP}"
           for _ in 1 2 3 4 5 6; do
             if curl -sf ${API_URL}/connectome >/dev/null 2>&1; then break; fi
             sleep 3
           done
+          echo "🔍 map read said: $(curl -s ${API_URL}/connectome | head -c 300)"
 
           # 1. The live map: nodes + characterized edges, partial by design
           run_test "Connectome (live map)" curl -sf ${API_URL}/connectome
