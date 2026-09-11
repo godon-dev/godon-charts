@@ -78,7 +78,7 @@ jobs:
           kubectl port-forward -n godon --address ${LOCALHOST_ADDR} "${API_POD}" ${PORT}:8080 > /tmp/pf.log 2>&1 &
           PF_PID=$!
           
-          # Give port-forward time to establish
+          # Give port forward time to establish
           sleep 3
 
           echo "✅ Port forward started (PID: ${PF_PID})"
@@ -108,6 +108,20 @@ jobs:
           # Export for use in subsequent steps
           echo "API_HOST=${LOCALHOST_ADDR}" >> $GITHUB_ENV
           echo "API_PORT=${PORT}" >> $GITHUB_ENV
+
+      - name: Port Forward to Godon Causal
+        env:
+          KUBECONFIG: /tmp/kind_kubeconfig.yaml
+        run: |
+          echo "🔗 Setting up port forward to godon-causal..."
+          CAUSAL_POD=$(kubectl get pods -n godon -l component=godon-causal -o jsonpath='{.items[0].metadata.name}')
+          echo "📦 Causal Pod: ${CAUSAL_POD}"
+          kubectl port-forward -n godon --address 127.0.0.3 "${CAUSAL_POD}" 9091:9091 > /tmp/pf_causal.log 2>&1 &
+          echo $! > /tmp/pf_causal_pid
+          sleep 3
+          curl -s -f --connect-timeout 2 http://127.0.0.3:9091/health >/dev/null 2>&1 \
+            && echo "✅ Causal port forward ready" \
+            || echo "⚠️ Causal port forward not answering yet"
 
       - name: Pull godon-cli Container
         run: |
@@ -265,79 +279,18 @@ jobs:
           API_URL="http://${{ env.API_HOST }}:${{ env.API_PORT }}"
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
 
-          # ── Minimal real seed ────────────────────────────────────────
-          # The map renders the constellation as it IS. Two real probe
-          # systemtenders (real catalog entries, real trial databases)
-          # stand in the room; /build derives the graph from them. No
-          # couplings are measured yet - edges appear when a real probe
-          # run characterizes them. Nothing synthetic is added.
-          cat > seed-target-config.yaml << 'EOF'
-          name: "smoke-test-seed-target"
-          targetType: "http"
-          spec:
-            url: "http://192.0.2.1:9"
-          metadata:
-            description: "Seed target for the connectome map"
+          # ── The map is a portable object ─────────────────────────────
+          # Upload a minimal fixture (2 real-shaped nodes, no measured
+          # couplings) straight into the engine's durable per-group
+          # store, then read it back through the api relay.
+          CAUSAL_URL="http://127.0.0.3:9091"
+          cat > seed-artifact.json << 'EOF'
+          {"nodes":[{"id":"probe-node-a","label":"probe node a"},{"id":"probe-node-b","label":"probe node b"}],"edges":[]}
           EOF
-          chmod 644 seed-target-config.yaml
-
-          CREATE_OUTPUT=$(docker run --rm --network host \
-            -v $(pwd):/work \
-            -w /work \
-            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            target create --file=seed-target-config.yaml 2>&1) || true
-          echo "🌱 seed target create said: ${CREATE_OUTPUT}"
-          TARGET_ID=$(echo "${CREATE_OUTPUT}" \
-            | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
-          echo "🌱 Seed target: ${TARGET_ID}"
-
-          for NODE in smoke-test-probe-node-a smoke-test-probe-node-b; do
-            cat > seed-node-config.yaml << EOF
-          meta:
-            configVersion: "0.3"
-          systemtender:
-            type: linux_performance
-          run:
-            parallel: 1
-            completion:
-              iterations:
-                min: 10
-                max: 100
-          effectuation:
-            targetRefs:
-              - "${TARGET_ID}"
-          cooperation:
-            active: false
-          objectives:
-            - name: test_metric
-              goal: MINIMIZE
-              reconnaissance:
-                service: prometheus
-                query: "scalar(test_metric)"
-                stabilization_seconds: 10
-                samples: 3
-                interval: 2
-          settings:
-            sysctl:
-              vm.swappiness:
-                constraints:
-                  - step: 1
-                    lower: 0
-                    upper: 100
-          EOF
-            chmod 644 seed-node-config.yaml
-            docker run --rm --network host \
-              -v $(pwd):/work \
-              -w /work \
-              "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              systemtender create --name="${NODE}" --file=seed-node-config.yaml 2>&1 || true
-          done
-
-          # Render the map from the real constellation, then let it settle
-          curl -sf -X POST ${API_URL}/build -H 'Content-Type: application/json' -d '{}' || true
-          for _ in 1 2 3 4 5 6 7 8 9 10; do
+          curl -sf -X POST ${CAUSAL_URL}/artifact -H 'Content-Type: application/json' -d @seed-artifact.json || true
+          for _ in 1 2 3 4 5 6; do
             if curl -sf ${API_URL}/connectome >/dev/null 2>&1; then break; fi
-            sleep 5
+            sleep 3
           done
 
           # 1. The live map: nodes + characterized edges, partial by design
@@ -1284,6 +1237,13 @@ jobs:
             echo "Killing port forward process (PID: ${PF_PID})"
             kill ${PF_PID} || true
             rm /tmp/pf_pid
+          fi
+
+          if [ -f /tmp/pf_causal_pid ]; then
+            CAUSAL_PF_PID=$(cat /tmp/pf_causal_pid)
+            echo "Killing causal port forward process (PID: ${CAUSAL_PF_PID})"
+            kill ${CAUSAL_PF_PID} || true
+            rm /tmp/pf_causal_pid
           fi
           
           echo "✅ Port forward cleanup completed"
