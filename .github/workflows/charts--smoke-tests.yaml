@@ -78,7 +78,7 @@ jobs:
           kubectl port-forward -n godon --address ${LOCALHOST_ADDR} "${API_POD}" ${PORT}:8080 > /tmp/pf.log 2>&1 &
           PF_PID=$!
           
-          # Give port-forward time to establish
+          # Give port forward time to establish
           sleep 3
 
           echo "✅ Port forward started (PID: ${PF_PID})"
@@ -108,6 +108,20 @@ jobs:
           # Export for use in subsequent steps
           echo "API_HOST=${LOCALHOST_ADDR}" >> $GITHUB_ENV
           echo "API_PORT=${PORT}" >> $GITHUB_ENV
+
+      - name: Port Forward to Godon Causal
+        env:
+          KUBECONFIG: /tmp/kind_kubeconfig.yaml
+        run: |
+          echo "🔗 Setting up port forward to godon-causal..."
+          CAUSAL_POD=$(kubectl get pods -n godon -l component=godon-causal -o jsonpath='{.items[0].metadata.name}')
+          echo "📦 Causal Pod: ${CAUSAL_POD}"
+          kubectl port-forward -n godon --address 127.0.0.3 "${CAUSAL_POD}" 9091:8091 > /tmp/pf_causal.log 2>&1 &
+          echo $! > /tmp/pf_causal_pid
+          sleep 3
+          curl -s -f --connect-timeout 2 http://127.0.0.3:9091/health >/dev/null 2>&1 \
+            && echo "✅ Causal port forward ready" \
+            || echo "⚠️ Causal port forward not answering yet"
 
       - name: Pull godon-cli Container
         run: |
@@ -254,6 +268,58 @@ jobs:
 
           run_test "Health endpoint" curl -sf ${API_URL}/health
           run_test "Root endpoint" curl -sf ${API_URL}/
+
+      - name: CONNECTOME Endpoint Tests - Reads Only
+        run: |
+          set +e
+          source /tmp/smoke-test-helpers.sh
+          echo "🗺️ Testing CONNECTOME endpoints - the map as offering (reads only)"
+          echo "=================================================================="
+
+          API_URL="http://${{ env.API_HOST }}:${{ env.API_PORT }}"
+          CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
+
+          # ── The map is a portable object ─────────────────────────────
+          # Upload a minimal fixture (2 real-shaped nodes, no measured
+          # couplings) straight into the engine's durable per-group
+          # store, then read it back through the api relay.
+          CAUSAL_URL="http://127.0.0.3:9091"
+          cat > seed-artifact.json << 'EOF'
+          {"nodes":[{"id":"probe-node-a","label":"probe node a"},{"id":"probe-node-b","label":"probe node b"}],"edges":[]}
+          EOF
+          UPLOAD_CODE=$(curl -s -o /tmp/upload_body.txt -w "%{http_code}" -X POST ${CAUSAL_URL}/artifact -H 'Content-Type: application/json' -d @seed-artifact.json) || true
+          echo "📤 artifact upload HTTP ${UPLOAD_CODE}: $(head -c 200 /tmp/upload_body.txt)"
+          echo "🔍 upload-route probe (GET /artifact/diag): HTTP $(curl -s -o /dev/null -w "%{http_code}" ${CAUSAL_URL}/artifact/diag-group)"
+          for _ in 1 2 3 4 5 6; do
+            if curl -sf ${API_URL}/connectome >/dev/null 2>&1; then break; fi
+            sleep 3
+          done
+          echo "🔍 map read said: $(curl -s ${API_URL}/connectome | head -c 300)"
+
+          # 1. The live map: nodes + characterized edges, partial by design
+          run_test "Connectome (live map)" curl -sf ${API_URL}/connectome
+
+          # 2. Measured curves with honest bars
+          run_test "Connectome curves" curl -sf ${API_URL}/connectome/curves
+
+          # 3. Ask the map: predict from a characterized sender found in
+          #    the connectome itself. Skipped with a warning while the
+          #    map is still thin - thin is honest, not broken.
+          CONNECTOME=$(curl -sf ${API_URL}/connectome)
+          SENDER=$(echo "${CONNECTOME}" | grep -oE '"sender_id"[^,}]*' | head -1 | cut -d'"' -f4)
+          if [ -n "${SENDER}" ]; then
+            run_test "Map predict (one hop)" curl -sf -X POST ${API_URL}/connectome/predict \
+              -H 'Content-Type: application/json' \
+              -d "{\"sender_id\": \"${SENDER}\", \"impulse_scale\": 1.0}"
+            run_test "Map predict (multihop)" curl -sf -X POST ${API_URL}/connectome/predict/multihop \
+              -H 'Content-Type: application/json' \
+              -d "{\"sender_id\": \"${SENDER}\", \"impulse_scale\": 1.0}"
+          else
+            echo "⚠️  No characterized sender in the connectome yet - prediction checks skipped"
+          fi
+
+          # 4. The certified export: complete at last build
+          run_test "Connectome artifact" curl -sf ${API_URL}/connectome/artifact
 
       - name: TARGET Endpoint Tests - Regular Operations
         run: |
@@ -842,6 +908,103 @@ jobs:
           
           echo "✅ CREDENTIAL adversarial operations completed"
 
+      - name: STEERWISH Endpoint Tests - Regular Operations
+        run: |
+          set +e
+          source /tmp/smoke-test-helpers.sh
+          echo "🌱 Testing STEERWISH endpoints - Regular Operations"
+          echo "===================================================="
+
+          CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
+          API_HOST="${{ env.API_HOST }}"
+          API_PORT="${{ env.API_PORT }}"
+
+          # Test 1: List steerwishes (initial state)
+          echo "📋 STEERWISH LIST - Initial state:"
+          run_test "Steerwish list (initial)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish list
+
+          # Test 2: Declare a steerwish
+          echo "🌱 STEERWISH DECLARE - Declaring test wish:"
+
+          printf 'outcome: "chainend.shift"\nband:\n  lo: -0.14\n  hi: -0.06\n  target: -0.10\nlimits:\n  exclude: []\n  maxChange: 0.5\nbudget: 2\nregime: standing\n' > steerwish-test.yaml
+
+          chmod 644 steerwish-test.yaml
+
+          DECLARE_OUTPUT=$(docker run --rm --network host \
+            -v $(pwd):/work:ro \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            wish declare --file=steerwish-test.yaml 2>&1)
+
+          if [ $? -eq 0 ]; then
+            _pass "Steerwish declare"
+          else
+            _fail "Steerwish declare"
+          fi
+          echo "${DECLARE_OUTPUT}"
+
+          # Extract wish ID from declare output - UUID pattern
+          WISH_ID=$(echo "${DECLARE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
+
+          if [ -z "${WISH_ID}" ]; then
+            _fail "Extract steerwish ID"
+            echo "⚠️  Using placeholder for further tests"
+            WISH_ID="550e8400-e29b-41d4-a716-446655440020"
+          else
+            _pass "Extract steerwish ID"
+            echo "✅ Steerwish declared with ID: ${WISH_ID}"
+            echo "${WISH_ID}" > /tmp/steerwish_id
+          fi
+
+          # Test 3: List steerwishes after declaration
+          echo "📋 STEERWISH LIST - After declaration:"
+          run_test "Steerwish list (after declare)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish list
+
+          # Test 4: Show the steerwish (event history: declared)
+          echo "🔍 STEERWISH SHOW - Event history:"
+          run_test "Steerwish show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish show --id="${WISH_ID}"
+
+          # Test 5: Malformed wish (band missing) must be rejected
+          echo "🧪 TEST: STEERWISH DECLARE without band (should reject):"
+          printf 'outcome: "chainend.shift"\n' > steerwish-malformed.yaml
+          chmod 644 steerwish-malformed.yaml
+          if docker run --rm --network host \
+            -v $(pwd):/work:ro \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            wish declare --file=steerwish-malformed.yaml 2>&1; then
+            echo "❌ FAIL: Should have rejected a wish without a band"
+          else
+            echo "✅ PASS: Malformed wish properly rejected"
+          fi
+
+          # Test 6: Show non-existent steerwish (should return error)
+          echo "🧪 TEST: STEERWISH SHOW with non-existent UUID (should return error):"
+          if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish show --id="00000000-0000-4000-8000-000000000000" 2>&1; then
+            echo "❌ FAIL: Should have returned error for non-existent steerwish"
+          else
+            echo "✅ PASS: Non-existent steerwish properly handled"
+          fi
+
+          # Test 7: Close the steerwish (owner's act - release the hold)
+          echo "🔒 STEERWISH CLOSE - Closing test wish:"
+          run_test "Steerwish close" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish close --id="${WISH_ID}"
+
+          # Test 8: Close again - idempotent
+          echo "🔒 STEERWISH CLOSE - Idempotency check:"
+          run_test "Steerwish close (idempotent)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish close --id="${WISH_ID}"
+
+          # Test 9: List after close
+          echo "📋 STEERWISH LIST - After close:"
+          run_test "Steerwish list (after close)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish list
+
       - name: Integration Stress Test - Multiple Operations
         run: |
           set +e
@@ -1077,6 +1240,13 @@ jobs:
             echo "Killing port forward process (PID: ${PF_PID})"
             kill ${PF_PID} || true
             rm /tmp/pf_pid
+          fi
+
+          if [ -f /tmp/pf_causal_pid ]; then
+            CAUSAL_PF_PID=$(cat /tmp/pf_causal_pid)
+            echo "Killing causal port forward process (PID: ${CAUSAL_PF_PID})"
+            kill ${CAUSAL_PF_PID} || true
+            rm /tmp/pf_causal_pid
           fi
           
           echo "✅ Port forward cleanup completed"
