@@ -287,8 +287,9 @@ jobs:
           cat > seed-artifact.json << 'EOF'
           {"nodes":[{"id":"probe-node-a","label":"probe node a"},{"id":"probe-node-b","label":"probe node b"}],"edges":[]}
           EOF
-          UPLOAD_RESP=$(curl -s -X POST ${CAUSAL_URL}/artifact -H 'Content-Type: application/json' -d @seed-artifact.json) || true
-          echo "📤 artifact upload said: ${UPLOAD_RESP}"
+          UPLOAD_CODE=$(curl -s -o /tmp/upload_body.txt -w "%{http_code}" -X POST ${CAUSAL_URL}/artifact -H 'Content-Type: application/json' -d @seed-artifact.json) || true
+          echo "📤 artifact upload HTTP ${UPLOAD_CODE}: $(head -c 200 /tmp/upload_body.txt)"
+          echo "🔍 upload-route probe (GET /artifact/diag): HTTP $(curl -s -o /dev/null -w "%{http_code}" ${CAUSAL_URL}/artifact/diag-group)"
           for _ in 1 2 3 4 5 6; do
             if curl -sf ${API_URL}/connectome >/dev/null 2>&1; then break; fi
             sleep 3
