@@ -255,6 +255,40 @@ jobs:
           run_test "Health endpoint" curl -sf ${API_URL}/health
           run_test "Root endpoint" curl -sf ${API_URL}/
 
+      - name: CONNECTOME Endpoint Tests - Reads Only
+        run: |
+          set +e
+          source /tmp/smoke-test-helpers.sh
+          echo "🗺️ Testing CONNECTOME endpoints - the map as offering (reads only)"
+          echo "=================================================================="
+
+          API_URL="http://${{ env.API_HOST }}:${{ env.API_PORT }}"
+
+          # 1. The live map: nodes + characterized edges, partial by design
+          run_test "Connectome (live map)" curl -sf ${API_URL}/connectome
+
+          # 2. Measured curves with honest bars
+          run_test "Connectome curves" curl -sf ${API_URL}/connectome/curves
+
+          # 3. Ask the map: predict from a characterized sender found in
+          #    the connectome itself. Skipped with a warning while the
+          #    map is still thin - thin is honest, not broken.
+          CONNECTOME=$(curl -sf ${API_URL}/connectome)
+          SENDER=$(echo "${CONNECTOME}" | grep -oE '"sender_id"[^,}]*' | head -1 | cut -d'"' -f4)
+          if [ -n "${SENDER}" ]; then
+            run_test "Map predict (one hop)" curl -sf -X POST ${API_URL}/connectome/predict \
+              -H 'Content-Type: application/json' \
+              -d "{\"sender_id\": \"${SENDER}\", \"impulse_scale\": 1.0}"
+            run_test "Map predict (multihop)" curl -sf -X POST ${API_URL}/connectome/predict/multihop \
+              -H 'Content-Type: application/json' \
+              -d "{\"sender_id\": \"${SENDER}\", \"impulse_scale\": 1.0}"
+          else
+            echo "⚠️  No characterized sender in the connectome yet - prediction checks skipped"
+          fi
+
+          # 4. The certified export: complete at last build
+          run_test "Connectome artifact" curl -sf ${API_URL}/connectome/artifact
+
       - name: TARGET Endpoint Tests - Regular Operations
         run: |
           set +e
