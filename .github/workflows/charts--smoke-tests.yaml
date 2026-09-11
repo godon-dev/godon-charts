@@ -273,10 +273,9 @@ jobs:
           # run characterizes them. Nothing synthetic is added.
           cat > seed-target-config.yaml << 'EOF'
           name: "smoke-test-seed-target"
-          targetType: "ssh"
+          targetType: "http"
           spec:
-            address: "192.0.2.1"
-            username: "seed"
+            url: "http://192.0.2.1:9"
           metadata:
             description: "Seed target for the connectome map"
           EOF
