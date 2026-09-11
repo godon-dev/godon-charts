@@ -38,9 +38,9 @@ godon_seeder:
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
   - name: CONTROLLER_VERSION
-    value: "0.55.0"
+    value: "0.56.0"
   - name: ROBOT_VERSION
-    value: "0.164.1"
+    value: "0.164.2"
   # Fresh-Windmill boot tolerance: first boot runs DB migrations
   # before the auth endpoint answers; give the seeder ~10 minutes.
   - name: SEEDER_MAX_RETRIES
@@ -315,7 +315,7 @@ pushgateway:
 api:
   image:
     repository: "ghcr.io/godon-dev/godon-api"
-    tag: "0.0.24"
+    tag: "0.0.25"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -358,7 +358,7 @@ api:
 mcp:
   image:
     repository: "ghcr.io/godon-dev/godon-mcp"
-    tag: "0.0.5"
+    tag: "0.0.6"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
