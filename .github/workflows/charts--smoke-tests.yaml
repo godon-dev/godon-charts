@@ -281,11 +281,13 @@ jobs:
           EOF
           chmod 644 seed-target-config.yaml
 
-          TARGET_ID=$(docker run --rm --network host \
+          CREATE_OUTPUT=$(docker run --rm --network host \
             -v $(pwd):/work \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            target create --file=seed-target-config.yaml 2>&1 \
+            target create --file=seed-target-config.yaml 2>&1) || true
+          echo "🌱 seed target create said: ${CREATE_OUTPUT}"
+          TARGET_ID=$(echo "${CREATE_OUTPUT}" \
             | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
           echo "🌱 Seed target: ${TARGET_ID}"
 
