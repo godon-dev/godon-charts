@@ -1038,7 +1038,7 @@ jobs:
               -v $(pwd):/work \
               -w /work \
               "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              systemtender create --name="stress-test-systemtender-${i}" --file=systemtender-stress-config-${i}.yaml 2>&1 || true
+              systemtender create --name="stress-test-systemtender-${i}-${GITHUB_RUN_ID}" --file=systemtender-stress-config-${i}.yaml 2>&1 || true
             sleep 2
           done
 
@@ -1046,7 +1046,7 @@ jobs:
             --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list 2>&1)
 
           for i in {1..5}; do
-            if echo "${STRESS_LIST}" | grep -q "stress-test-systemtender-${i}"; then
+            if echo "${STRESS_LIST}" | grep -q "stress-test-systemtender-${i}-${GITHUB_RUN_ID}"; then
               _pass "Stress systemtender ${i} create"
             else
               _fail "Stress systemtender ${i} create"
