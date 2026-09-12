@@ -246,7 +246,9 @@ grafana:
 ## Component | Promtail (Log Collector)
 ########################################
 promtail:
-  enabled: true
+  # retired: app logs ship via the otel_logging lib / causal otel (OTLP -> collector -> Loki).
+  # flip back on only as a deliberate catch-all decision.
+  enabled: false
 
   config:
     clients:
