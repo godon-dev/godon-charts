@@ -245,6 +245,10 @@ causal:
     value: "5433"
   - name: GODON_DETECTION_CONFIDENCE
     value: "0.95"
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: "http://godon-observability-opentelemetry-collector.godon-observability.svc.cluster.local:4318"
+  - name: OTEL_SERVICE_NAME
+    value: "godon-causal"
 
   livenessProbe:
     enabled: true
