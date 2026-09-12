@@ -213,7 +213,7 @@ observer:
 causal:
   image:
     repository: "ghcr.io/godon-dev/godon-causal"
-    tag: "0.19.5"
+    tag: "0.19.6"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
