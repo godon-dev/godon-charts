@@ -246,20 +246,25 @@ grafana:
 ## Component | Promtail (Log Collector)
 ########################################
 promtail:
-  # retired: app logs ship via the otel_logging lib / causal otel (OTLP -> collector -> Loki).
-  # flip back on only as a deliberate catch-all decision.
-  enabled: false
+  enabled: true
 
   config:
     clients:
       - url: http://godon-observability-loki.godon-observability.svc.cluster.local:3100/loki/api/v1/push
     snippets:
       pipelineStages:
+        # deliberate scope - promtail stays as the catch-all net for app logs.
+        # 1) everything outside the godon namespace is cluster infra
+        #    (kind, loki, prometheus, db-adjacent tooling): no app signal
         - match:
-            selector: '{component=~"api|godon-observer|seeder"}'
-            action: keep
-            stages:
-              - {}
+            selector: '{namespace!="godon"}'
+            action: drop
+        # 2) databases: [INFO] is millions of sleep/heartbeat lines a day.
+        #    WARN/ERROR and untagged lines (tracebacks = the real signal)
+        #    survive and stay visible in Loki.
+        - match:
+            selector: '{component=~"yugabytedb|primary|metadata-db|windmill-db"} |= "[INFO]"'
+            action: drop
 
   resources:
     requests:
