@@ -265,6 +265,16 @@ promtail:
         - match:
             selector: '{component=~"yugabytedb|primary|metadata-db|windmill-db"} |= "[INFO]"'
             action: drop
+        # 3) yugabyte C++ glog: severity is the leading letter (I/W/E/F).
+        #    I-level is ~800 resolve/bind lines a second of no signal;
+        #    W/E/F stay visible.
+        - match:
+            selector: '{component="yugabytedb"} |~ "stderr F I[0-9]{4} "'
+            action: drop
+        # 4) postgres: routine "LOG:" lines; WARNING/ERROR/FATAL survive
+        - match:
+            selector: '{component=~"primary|metadata-db|windmill-db"} |= " LOG: "'
+            action: drop
 
   resources:
     requests:
