@@ -1235,11 +1235,39 @@ jobs:
         run: |
           echo "🧹 Cleaning up port forward..."
           
+          # Tunnel diagnostics before the kill: three failing smoke runs
+          # scattered "error sending request" at 127.0.0.2:9090 while every
+          # in-cluster pod stayed healthy — the forward's own state is the
+          # missing witness (it lives in the runner service's private /tmp,
+          # visible only from inside the job).
+          echo "🔎 Tunnel diagnostics:"
+          if [ -f /tmp/pf_pid ]; then
+            PF_PID=$(cat /tmp/pf_pid)
+            if kill -0 ${PF_PID} 2>/dev/null; then
+              echo "api forward process ${PF_PID}: ALIVE"
+            else
+              echo "api forward process ${PF_PID}: DEAD"
+            fi
+          fi
+          if [ -f /tmp/pf_causal_pid ]; then
+            CAUSAL_PF_PID=$(cat /tmp/pf_causal_pid)
+            if kill -0 ${CAUSAL_PF_PID} 2>/dev/null; then
+              echo "causal forward process ${CAUSAL_PF_PID}: ALIVE"
+            else
+              echo "causal forward process ${CAUSAL_PF_PID}: DEAD"
+            fi
+          fi
+          (ss -ltn 2>/dev/null | grep -E ":(9090|9091) ") || echo "no listener on 9090/9091"
+          echo "--- pf.log (api tunnel):"
+          cat /tmp/pf.log 2>/dev/null || echo "(empty or missing)"
+          echo "--- pf_causal.log tail:"
+          tail -5 /tmp/pf_causal.log 2>/dev/null || echo "(empty or missing)"
+
           if [ -f /tmp/pf_pid ]; then
             PF_PID=$(cat /tmp/pf_pid)
             echo "Killing port forward process (PID: ${PF_PID})"
             kill ${PF_PID} || true
-            rm /tmp/pf_pid
+            rm -f /tmp/pf_pid
           fi
 
           if [ -f /tmp/pf_causal_pid ]; then
