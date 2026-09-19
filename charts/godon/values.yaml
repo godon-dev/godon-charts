@@ -75,6 +75,8 @@ windmill:
           value: "http://godon-observability-opentelemetry-collector.godon-observability.svc.cluster.local:4318"
         - name: OTEL_SERVICE_NAME
           value: "godon-controller"
+        - name: GODON_CAUSAL_URL
+          value: "http://godon-causal:9091"
         - name: GODON_ARCHIVE_DB_SERVICE_HOST
           value: "yb-tservers.godon.svc.cluster.local"
         - name: GODON_ARCHIVE_DB_SERVICE_PORT
