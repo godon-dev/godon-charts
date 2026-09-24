@@ -215,7 +215,7 @@ observer:
 causal:
   image:
     repository: "ghcr.io/godon-dev/godon-causal"
-    tag: "0.22.8"
+    tag: "0.22.9"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -366,7 +366,7 @@ api:
 mcp:
   image:
     repository: "ghcr.io/godon-dev/godon-mcp"
-    tag: "0.0.8"
+    tag: "0.0.9"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
