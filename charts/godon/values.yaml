@@ -390,7 +390,7 @@ mcp:
   - name: GODON_API_PORT
     value: "9090"
   - name: GODON_CAUSAL_HOSTNAME
-    value: "godon-godon-causal"
+    value: "godon-causal"
   - name: GODON_CAUSAL_PORT
     value: "9091"
   - name: PORT
