@@ -367,7 +367,7 @@ api:
 mcp:
   image:
     repository: "ghcr.io/godon-dev/godon-mcp"
-    tag: "0.0.9"
+    tag: "0.0.10"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
