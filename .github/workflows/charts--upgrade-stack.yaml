@@ -30,6 +30,10 @@ jobs:
           
           # Export kubeconfig to known location
           kind export kubeconfig --name=godon-1-cluster --kubeconfig=/tmp/kind_kubeconfig.yaml
+          # Jobs are immutable: the seeder Job's pod template carries the
+          # controller/robot versions, so every version pin bump needs the
+          # old Job gone before helm upgrade can recreate it.
+          kubectl -n godon delete job godon-seeder --ignore-not-found
           
           # Verify connectivity
           kubectl cluster-info --kubeconfig=/tmp/kind_kubeconfig.yaml
