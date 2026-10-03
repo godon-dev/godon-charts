@@ -554,9 +554,21 @@ jobs:
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             systemtender create --name="smoke-test-systemtender" --file=systemtender-smoke-config.yaml 2>&1 || true
 
-          ROBOT_UUID=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list 2>&1 \
-            | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
+          # The create can outlive the CLI's 30s patience on a fresh stack
+          # (per-robot archive schema bootstrap); the robot registers in
+          # the registry while the CLI call is still in flight. Poll the
+          # list for the NAMED robot - never trust one shot. grep only:
+          # the runner has no awk (10-03 receipt).
+          ROBOT_UUID=""
+          for i in $(seq 1 8); do
+            ROBOT_UUID=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+              --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list 2>&1 \
+              | grep -B1 '^ *Name: smoke-test-systemtender *$' \
+              | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+            if [ -n "${ROBOT_UUID}" ]; then break; fi
+            echo "create poll $i: robot not visible yet..."
+            sleep 10
+          done
 
           if [ -n "${ROBOT_UUID}" ]; then
             _pass "Systemtender create"
@@ -623,10 +635,32 @@ jobs:
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
             systemtender update --id="${ROBOT_UUID}" --file=systemtender-update-config.yaml
 
-          # Test 6: Delete systemtender
+          # Test 6: Delete systemtender. The delete is fail-closed (0.59.9):
+          # it waits, bounded 60s, for every worker job terminal before
+          # drop_database - the CLI's ~30s patience can end first while the
+          # delete still completes server-side. Poll until gone, not once.
           echo "🗑️  ROBOT PURGE - Deleting systemtender (with force flag):"
-          run_test "Systemtender purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender purge --force --id="${ROBOT_UUID}"
+          PURGE_OK=false
+          for i in $(seq 1 6); do
+            if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+              --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender purge --force --id="${ROBOT_UUID}" 2>&1; then
+              PURGE_OK=true
+              break
+            fi
+            if ! docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+              --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender show --id="${ROBOT_UUID}" >/dev/null 2>&1; then
+              PURGE_OK=true
+              echo "purge completed server-side (client timed out, robot is gone)"
+              break
+            fi
+            echo "purge attempt $i: bounded delete guard still working..."
+            sleep 10
+          done
+          if [ "$PURGE_OK" = true ]; then
+            _pass "Systemtender purge"
+          else
+            _fail "Systemtender purge"
+          fi
 
           # Test 7: List systemtenders after deletion
           echo "📋 ROBOT LIST - After deletion:"
@@ -927,7 +961,7 @@ jobs:
           # Test 2: Declare a steerwish
           echo "🌱 STEERWISH DECLARE - Declaring test wish:"
 
-          printf 'outcome: "chainend.shift"\nband:\n  lo: -0.14\n  hi: -0.06\n  target: -0.10\nlimits:\n  exclude: []\n  maxChange: 0.5\nbudget: 2\nregime: standing\n' > steerwish-test.yaml
+          printf 'claims:\n  - outcome: "chainend.shift"\n    band:\n      lo: -0.14\n      hi: -0.06\n      target: -0.10\nterms: []\nlimits:\n  exclude: []\n  maxChange: 0.5\nbudget: 2\nregime: standing\n' > steerwish-test.yaml
 
           chmod 644 steerwish-test.yaml
 
@@ -969,7 +1003,7 @@ jobs:
 
           # Test 5: Malformed wish (band missing) must be rejected
           echo "🧪 TEST: STEERWISH DECLARE without band (should reject):"
-          printf 'outcome: "chainend.shift"\n' > steerwish-malformed.yaml
+          printf 'claims:\n  - outcome: "chainend.shift"\n' > steerwish-malformed.yaml
           chmod 644 steerwish-malformed.yaml
           if docker run --rm --network host \
             -v $(pwd):/work:ro \
@@ -1042,14 +1076,55 @@ jobs:
             sleep 2
           done
 
-          STRESS_LIST=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list 2>&1)
+          # Same patience as the main create: stress robots appear with
+          # lag while their creates finish server-side. Poll until all
+          # five are visible or the budget is spent, then judge.
+          STRESS_LIST=""
+          for i in $(seq 1 8); do
+            STRESS_LIST=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+              --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list 2>&1)
+            MISSING=0
+            for j in {1..5}; do
+              echo "${STRESS_LIST}" | grep -q "stress-test-systemtender-${j}-${GITHUB_RUN_ID}" || MISSING=1
+            done
+            if [ "${MISSING}" -eq 0 ]; then break; fi
+            echo "stress poll $i: some robots not visible yet..."
+            sleep 10
+          done
 
           for i in {1..5}; do
             if echo "${STRESS_LIST}" | grep -q "stress-test-systemtender-${i}-${GITHUB_RUN_ID}"; then
               _pass "Stress systemtender ${i} create"
             else
               _fail "Stress systemtender ${i} create"
+            fi
+          done
+
+          # Clean up: purge the stress robots this run created. A smoke
+          # run must not leak load into the next - leftover robots grind
+          # trials against the shared archive DB and slow every later
+          # create (receipts 10-03: 24s request-to-script under zombie
+          # load). Purge with poll-until-gone, same as the main robot.
+          for i in {1..5}; do
+            STRESS_UUID=$(echo "${STRESS_LIST}" \
+              | grep -B1 "Name: stress-test-systemtender-${i}-${GITHUB_RUN_ID}" \
+              | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+            if [ -z "${STRESS_UUID}" ]; then continue; fi
+            STRESS_GONE=false
+            for t in $(seq 1 6); do
+              curl_out=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+                --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender purge --force --id="${STRESS_UUID}" 2>&1 || true)
+              if ! docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+                --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender show --id="${STRESS_UUID}" >/dev/null 2>&1; then
+                STRESS_GONE=true
+                break
+              fi
+              sleep 10
+            done
+            if [ "${STRESS_GONE}" = true ]; then
+              echo "🧹 stress robot ${i} purged (${STRESS_UUID})"
+            else
+              echo "⚠️  stress robot ${i} did not purge in window (${STRESS_UUID})"
             fi
           done
           
