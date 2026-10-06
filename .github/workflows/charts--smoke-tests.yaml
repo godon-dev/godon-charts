@@ -628,6 +628,28 @@ jobs:
           run_test "Systemtender purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender purge --force --id="${ROBOT_UUID}"
 
+          # Test 6b: The purge is now an async marker (202) — the real
+          # check is the contract's own done receipt: GET until 404.
+          # The registry row is removed last, only after the archive DB
+          # drop succeeded, so 404 proves the whole executor chain ran.
+          echo "⏳ ROBOT PURGE - Polling GET until 404 (async executor)..."
+          PURGE_GONE=0
+          for i in $(seq 1 30); do
+            if ! docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+              --hostname=${API_HOST} --port=${API_PORT} --insecure \
+              systemtender get --id="${ROBOT_UUID}" >/dev/null 2>&1; then
+              PURGE_GONE=1
+              break
+            fi
+            sleep 4
+          done
+          if [ "$PURGE_GONE" -eq 1 ]; then
+            echo "✅ PASS: systemtender fully purged (GET 404 after async executor finished)"
+          else
+            echo "❌ FAIL: systemtender still present after 120s — async purge did not complete"
+            exit 1
+          fi
+
           # Test 7: List systemtenders after deletion
           echo "📋 ROBOT LIST - After deletion:"
           run_test "Systemtender list (after delete)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
@@ -677,12 +699,12 @@ jobs:
           fi
 
           # Test 3: Delete non-existent systemtender
-          echo "🧪 TEST: ROBOT PURGE with non-existent UUID (should return error):"
+          echo "🧪 TEST: ROBOT PURGE with non-existent UUID (idempotent contract — accepted, executor no-ops):"
           if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender purge --id="99999999-9999-4999-9999-999999999999" 2>&1; then
-            echo "❌ FAIL: Should have returned error for non-existent systemtender"
+            echo "✅ PASS: idempotent purge accepted — DELETE of unknown id is a no-op by contract"
           else
-            echo "✅ PASS: Non-existent systemtender deletion properly handled"
+            echo "❌ FAIL: idempotent delete should not error on an unknown id"
           fi
 
           # Test 4: Malformed systemtender config
@@ -1004,6 +1026,31 @@ jobs:
           echo "📋 STEERWISH LIST - After close:"
           run_test "Steerwish list (after close)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure wish list
+
+          # Test 10: Purge the wish — async marker (202); verify via the
+          # contract's done receipt: GET until 404 (registry row removed
+          # last, after the close landed, so 404 proves the executor ran).
+          echo "🗑️  STEERWISH PURGE - Deleting wish (async marker):"
+          run_test "Steerwish purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish delete --id="${WISH_ID}"
+
+          echo "⏳ STEERWISH PURGE - Polling GET until 404 (async executor)..."
+          WISH_GONE=0
+          for i in $(seq 1 30); do
+            if ! docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+              --hostname=${API_HOST} --port=${API_PORT} --insecure \
+              wish show --id="${WISH_ID}" >/dev/null 2>&1; then
+              WISH_GONE=1
+              break
+            fi
+            sleep 4
+          done
+          if [ "$WISH_GONE" -eq 1 ]; then
+            echo "✅ PASS: steerwish fully purged (GET 404 after async executor finished)"
+          else
+            echo "❌ FAIL: steerwish still present after 120s — async purge did not complete"
+            exit 1
+          fi
 
       - name: Integration Stress Test - Multiple Operations
         run: |
