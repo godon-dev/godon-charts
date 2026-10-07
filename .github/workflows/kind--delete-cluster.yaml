@@ -37,4 +37,9 @@ jobs:
         run: |
           echo "🧹 Cleaning up kubeconfig and artifacts..."
           rm -f /tmp/kind_kubeconfig.yaml
-          echo "✅ Cleanup complete"
+          # The runner's /tmp is isolated from the host user's /tmp — the
+          # rm above only clears this job's copy. Remove the host-side
+          # kubeconfig too, so host tooling sees "no cluster" instead of
+          # an x509 unknown-authority error against the dead cluster CA.
+          docker run --rm -v /tmp:/hosttmp alpine rm -f /hosttmp/kind_kubeconfig.yaml || true
+          echo "✅ Cleanup complete (container + host kubeconfig)"
