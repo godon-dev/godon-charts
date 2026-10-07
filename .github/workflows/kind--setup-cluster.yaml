@@ -32,3 +32,15 @@ jobs:
           echo "✅ KIND cluster created successfully"
           kind get clusters
           kubectl cluster-info --kubeconfig=/tmp/kind_kubeconfig.yaml
+
+      - name: Publish kubeconfig to host /tmp
+        run: |
+          # The runner's /tmp is isolated from the host user's /tmp (the
+          # file written above vanishes with the job). Host-side tooling
+          # (ssh + kubectl, wishctl) reads /tmp/kind_kubeconfig.yaml —
+          # publish the fresh kubeconfig there via the host docker daemon
+          # (root in the container writes past host file perms). The
+          # existing file's owner is preserved when present.
+          kind export kubeconfig --name godon-1-cluster --kubeconfig /tmp/kind_kubeconfig.yaml
+          docker run --rm -i -v /tmp:/hosttmp alpine sh -c 'cat > /hosttmp/.kc.staged && O=$(stat -c "%u:%g" /hosttmp/kind_kubeconfig.yaml 2>/dev/null); if [ -n "$O" ]; then chown "$O" /hosttmp/.kc.staged && chmod 600 /hosttmp/.kc.staged && mv /hosttmp/.kc.staged /hosttmp/kind_kubeconfig.yaml && echo "published, owner preserved: $O"; else chmod 666 /hosttmp/.kc.staged && mv /hosttmp/.kc.staged /hosttmp/kind_kubeconfig.yaml && echo "published, mode 666 (no prior owner to preserve)"; fi' < /tmp/kind_kubeconfig.yaml
+          echo "✅ kubeconfig published to host /tmp/kind_kubeconfig.yaml"
