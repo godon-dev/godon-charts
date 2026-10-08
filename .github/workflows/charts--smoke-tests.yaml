@@ -1088,6 +1088,29 @@ jobs:
             done
             echo "$out"; return 1
           }
+
+          # Purge by id with the full lifecycle: a windmill-enqueued
+          # create materializes minutes late - a 404 before the first
+          # 200 means "still queued", not gone. DELETE is the marker
+          # (202), GET-404 the done receipt (real 404s since api
+          # 0.0.31, #353). 0 when gone, 1 when the window closed.
+          purge_by_id() {
+            local id="$1" t code seen=false
+            for t in $(seq 1 28); do
+              code=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${id})
+              if [ "$code" = "200" ]; then seen=true; break; fi
+              sleep 15
+            done
+            [ "$seen" = true ] || return 1
+            for t in $(seq 1 12); do
+              curl -s -X DELETE -o /dev/null http://${API_HOST}:${API_PORT}/systemtenders/${id} || true
+              code=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${id})
+              [ "$code" = "404" ] && return 0
+              sleep 10
+            done
+            return 1
+          }
+
           
           # Create multiple systemtenders in succession
           echo "🔨 Creating multiple systemtenders..."
@@ -1100,85 +1123,74 @@ jobs:
           fi
           echo "Using target ID for stress test systemtenders: ${TARGET_ID}"
 
-          ROBOT_STRESS_PASS=0
-          ROBOT_STRESS_FAIL=0
+          # CLEAN-ROOM SWEEP: whatever tenders exist right now get
+          # purged - the assertions at the end of this block must
+          # measure only THIS run's objects. (Live 10-08: a leftover
+          # from a failed prior run made the registry assertion flag
+          # an object this run never created.)
+          for ID in $(curl -s http://${API_HOST}:${API_PORT}/systemtenders | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | sort -u); do
+            echo "  🧹 sweeping pre-existing tender ${ID}"
+            purge_by_id "$ID" || _fail "Clean-room sweep of ${ID}"
+          done
 
           for i in {1..5}; do
             printf 'meta:\n  configVersion: "0.3"\nsystemtender:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > systemtender-stress-config-${i}.yaml
 
             chmod 644 systemtender-stress-config-${i}.yaml
-            cli_retry "stress create ${i}" \
+            OUT=$(cli_retry "stress create ${i}" \
               --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              systemtender create --name="stress-test-systemtender-${i}-${GITHUB_RUN_ID}" --file=systemtender-stress-config-${i}.yaml 2>&1 || true
+              systemtender create --name="stress-test-systemtender-${i}-${GITHUB_RUN_ID}" --file=systemtender-stress-config-${i}.yaml 2>&1) || true
+            # The POST response carries the id - capture it NOW. Judging
+            # creates by name-in-list raced the windmill create queue
+            # (rows materialize minutes late under robot-registration
+            # load; live 10-08: duplicate names from retried creates).
+            echo "$OUT" | grep -m1 -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' > /tmp/stress_id_${i}
+            if [ -s /tmp/stress_id_${i} ]; then
+              echo "  created stress robot ${i}: $(cat /tmp/stress_id_${i})"
+            else
+              echo "  ⚠️  stress robot ${i}: no id in create response"
+            fi
             sleep 2
           done
 
-          # Same patience as the main create: stress robots appear with
-          # lag while their creates finish server-side. Poll until all
-          # five are visible or the budget is spent, then judge. Probe
-          # via HTTP status: a transport error (port-forward blip) is a
-          # retriable probe, never evidence - the docker-run list calls
-          # poisoned the evidence on connection errors (live 10-08:
-          # three honest-but-false create failures).
-          STRESS_LIST_FILE=/tmp/stress_list.json
-          GOOD_LIST=false
-          # 20 polls x 15s = 5min: create jobs are windmill-enqueued and
-          # materialize when the worker queue drains (observed 10-08:
-          # rows landing minutes after the POST under robot-registration
-          # load; every read is itself a queue job, so poll sparsely).
-          for i in $(seq 1 20); do
-            CODE=$(curl -s -o "${STRESS_LIST_FILE}" -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders)
-            MISSING=0
-            if [ "${CODE}" != "200" ]; then
-              MISSING=1
-            else
-              GOOD_LIST=true
-              for j in {1..5}; do
-                grep -q "stress-test-systemtender-${j}-${GITHUB_RUN_ID}" "${STRESS_LIST_FILE}" || MISSING=1
-              done
-            fi
-            if [ "${MISSING}" -eq 0 ]; then break; fi
-            echo "stress poll $i: some robots not visible yet (http ${CODE})..."
+          # Materialize-all: the enqueued creates land when the worker
+          # queue drains (observed up to ~7 min under robot-registration
+          # load; every read is itself a queue job - poll sparsely).
+          ALL_MATERIALIZED=false
+          for t in $(seq 1 28); do
+            ALL=200
+            for j in {1..5}; do
+              [ -s /tmp/stress_id_${j} ] || continue
+              code=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/$(cat /tmp/stress_id_${j}))
+              [ "$code" != "200" ] && ALL=1
+            done
+            if [ "$ALL" = "200" ]; then ALL_MATERIALIZED=true; break; fi
+            echo "  materialization poll ${t}..."
             sleep 15
           done
 
           for i in {1..5}; do
-            if [ "${GOOD_LIST}" = true ] && grep -q "stress-test-systemtender-${i}-${GITHUB_RUN_ID}" "${STRESS_LIST_FILE}"; then
+            if [ -s /tmp/stress_id_${i} ]; then
               _pass "Stress systemtender ${i} create"
             else
               _fail "Stress systemtender ${i} create"
             fi
           done
 
-          # Clean up: purge the stress robots this run created. A smoke
-          # run must not leak load into the next - leftover robots grind
-          # trials against the shared archive DB and slow every later
-          # create (receipts 10-03: 24s request-to-script under zombie
-          # load). DELETE is the marker (202), GET-404 is the done
-          # receipt; transport errors are retriable probes, never
-          # evidence of either state. A miss inside the window is a
-          # FAILURE, not a warning: greens hid deletion-failed ghosts
-          # behind this line for weeks (live receipts 10-06/10-07).
-          for i in {1..5}; do
-            STRESS_NAME=$(grep -oE "stress-test-systemtender-[0-9]-${GITHUB_RUN_ID}" "${STRESS_LIST_FILE}" | sed -n "${i}p")
-            if [ -z "${STRESS_NAME}" ]; then continue; fi
-            STRESS_UUID=$(python3 -c "import json; rs=json.load(open('${STRESS_LIST_FILE}')); print(next((r['id'] for r in rs if r['name']=='${STRESS_NAME}'), ''))")
-            if [ -z "${STRESS_UUID}" ]; then continue; fi
-            STRESS_GONE=false
-            for t in $(seq 1 9); do
-              curl -s -X DELETE -o /dev/null http://${API_HOST}:${API_PORT}/systemtenders/${STRESS_UUID} || true
-              CODE=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${STRESS_UUID})
-              if [ "${CODE}" = "404" ]; then
-                STRESS_GONE=true
-                break
-              fi
-              # 200 = still deleting; 000/5xx = transport - keep polling
-              sleep 10
-            done
-            if [ "${STRESS_GONE}" = true ]; then
-              echo "🧹 stress robot ${i} purged (${STRESS_UUID})"
+          # Clean up: purge the stress robots this run created, by the
+          # ids captured at create time. A smoke run must not leak load
+          # into the next - leftover robots grind trials against the
+          # shared archive DB and slow every later create (receipts
+          # 10-03: 24s request-to-script under zombie load). A miss
+          # inside the window is a FAILURE, not a warning: greens hid
+          # deletion-failed ghosts behind this line for weeks (live
+          # receipts 10-06/10-07).
+          for j in {1..5}; do
+            [ -s /tmp/stress_id_${j} ] || continue
+            if purge_by_id "$(cat /tmp/stress_id_${j})"; then
+              echo "🧹 stress robot ${j} purged"
             else
-              _fail "Stress systemtender ${i} purge (still visible after window: ${STRESS_UUID})"
+              _fail "Stress systemtender ${j} purge (did not clear in window)"
             fi
           done
           
