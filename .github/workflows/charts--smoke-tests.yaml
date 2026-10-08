@@ -547,14 +547,14 @@ jobs:
           # create is windmill-enqueued - the registry row materializes
           # when the worker queue drains (observed minutes under load;
           # live 10-08) - so poll GET-by-id until 200.
-          python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-smoke-config.yaml')); print(json.dumps({'name': 'smoke-test-systemtender', 'config': d}))" > systemtender-create-payload.json
+          /run/current-system/sw/bin/python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-smoke-config.yaml')); print(json.dumps({'name': 'smoke-test-systemtender', 'config': d}))" > systemtender-create-payload.json
 
           ROBOT_UUID=""
           CREATE_CODE=$(curl -s -o /tmp/robot_create.json -w "%{http_code}" -X POST \
             -H 'Content-Type: application/json' --data-binary @systemtender-create-payload.json \
             http://${API_HOST}:${API_PORT}/systemtenders)
           if [ "${CREATE_CODE}" = "200" ] || [ "${CREATE_CODE}" = "201" ]; then
-            ROBOT_UUID=$(python3 -c "import json; print(json.load(open('/tmp/robot_create.json')).get('id',''))")
+            ROBOT_UUID=$(/run/current-system/sw/bin/python3 -c "import json; print(json.load(open('/tmp/robot_create.json')).get('id',''))")
           fi
 
           if [ -n "${ROBOT_UUID}" ]; then
@@ -623,7 +623,7 @@ jobs:
           sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" systemtender-update-config.yaml
           chmod 644 systemtender-update-config.yaml
 
-          python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-update-config.yaml')); print(json.dumps({'config': d, 'force': False}))" > systemtender-update-payload.json
+          /run/current-system/sw/bin/python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-update-config.yaml')); print(json.dumps({'config': d, 'force': False}))" > systemtender-update-payload.json
 
           run_test "Systemtender update" curl -sf -X PUT \
             -H 'Content-Type: application/json' --data-binary @systemtender-update-payload.json \
@@ -1134,12 +1134,12 @@ jobs:
             printf 'meta:\n  configVersion: "0.3"\nsystemtender:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > systemtender-stress-config-${i}.yaml
 
             chmod 644 systemtender-stress-config-${i}.yaml
-            python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-stress-config-${i}.yaml')); print(json.dumps({'name': 'stress-test-systemtender-${i}-${GITHUB_RUN_ID}', 'config': d}))" > stress-payload-${i}.json
+            /run/current-system/sw/bin/python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-stress-config-${i}.yaml')); print(json.dumps({'name': 'stress-test-systemtender-${i}-${GITHUB_RUN_ID}', 'config': d}))" > stress-payload-${i}.json
             CREATE_CODE=$(curl -s -o /tmp/stress_create.json -w "%{http_code}" -X POST \
               -H 'Content-Type: application/json' --data-binary @stress-payload-${i}.json \
               http://${API_HOST}:${API_PORT}/systemtenders)
             if [ "${CREATE_CODE}" = "200" ] || [ "${CREATE_CODE}" = "201" ]; then
-              python3 -c "import json; print(json.load(open('/tmp/stress_create.json')).get('id',''))" > /tmp/stress_id_${i}
+              /run/current-system/sw/bin/python3 -c "import json; print(json.load(open('/tmp/stress_create.json')).get('id',''))" > /tmp/stress_id_${i}
             else
               : > /tmp/stress_id_${i}
               echo "  ⚠️  stress robot ${i}: create answered http ${CREATE_CODE}"
