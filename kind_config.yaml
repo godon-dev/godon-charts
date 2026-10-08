@@ -19,6 +19,12 @@ nodes:
     hostPort: 7080
     listenAddress: "127.0.0.1"
     protocol: TCP
+  # the api's NodePort - bench/workflow CLIs ride the node port directly
+  # (kubectl port-forward flapped through two flights on 10-08)
+  - containerPort: 32002
+    hostPort: 32002
+    listenAddress: "127.0.0.1"
+    protocol: TCP
 # workers
 - role: worker
   image: kindest/node:v1.32.1
