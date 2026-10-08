@@ -1130,13 +1130,16 @@ jobs:
           # trials against the shared archive DB and slow every later
           # create (receipts 10-03: 24s request-to-script under zombie
           # load). Purge with poll-until-gone, same as the main robot.
+          # A miss inside the window is a FAILURE, not a warning: greens
+          # hid deletion-failed ghosts behind this line for weeks (live
+          # receipts 10-06/10-07).
           for i in {1..5}; do
             STRESS_UUID=$(echo "${STRESS_LIST}" \
               | grep -B1 "Name: stress-test-systemtender-${i}-${GITHUB_RUN_ID}" \
               | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
             if [ -z "${STRESS_UUID}" ]; then continue; fi
             STRESS_GONE=false
-            for t in $(seq 1 6); do
+            for t in $(seq 1 9); do
               curl_out=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
                 --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender purge --force --id="${STRESS_UUID}" 2>&1 || true)
               if ! docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
@@ -1149,7 +1152,7 @@ jobs:
             if [ "${STRESS_GONE}" = true ]; then
               echo "🧹 stress robot ${i} purged (${STRESS_UUID})"
             else
-              echo "⚠️  stress robot ${i} did not purge in window (${STRESS_UUID})"
+              _fail "Stress systemtender ${i} purge (still visible after window: ${STRESS_UUID})"
             fi
           done
           
@@ -1195,6 +1198,13 @@ jobs:
           echo "📋 Listing all credentials after stress test:"
           run_test "Credential list (post-stress)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure credential list
+
+          # The contract's last line: the suite leaves NOTHING behind.
+          # Both registries must read empty - residue rows are exactly
+          # how deletion-failed ghosts hid behind green for weeks (live
+          # receipts 10-06/10-07: green smokes, 5-6 ghost rows each).
+          run_test "Systemtender registry empty (no residue)" bash -c "OUT=\$(curl -sf http://${API_HOST}:${API_PORT}/systemtenders) || exit 1; ! echo \"\$OUT\" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
+          run_test "Steerwish registry empty (no residue)" bash -c "OUT=\$(curl -sf http://${API_HOST}:${API_PORT}/steerwishes) || exit 1; ! echo \"\$OUT\" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
 
       - name: Verify Test Results
         if: always()
