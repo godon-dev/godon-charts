@@ -543,27 +543,28 @@ jobs:
           sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" systemtender-smoke-config.yaml
           chmod 644 systemtender-smoke-config.yaml
 
-          docker run --rm --network host \
-            -v $(pwd):/work \
-            -w /work \
-            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            systemtender create --name="smoke-test-systemtender" --file=systemtender-smoke-config.yaml 2>&1 || true
+          # Direct HTTP: the contract IS this API - no docker hop. The
+          # create is windmill-enqueued - the registry row materializes
+          # when the worker queue drains (observed minutes under load;
+          # live 10-08) - so poll GET-by-id until 200.
+          python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-smoke-config.yaml')); print(json.dumps({'name': 'smoke-test-systemtender', 'config': d}))" > systemtender-create-payload.json
 
-          # The create can outlive the CLI's 30s patience on a fresh stack
-          # (per-robot archive schema bootstrap); the robot registers in
-          # the registry while the CLI call is still in flight. Poll the
-          # list for the NAMED robot - never trust one shot. grep only:
-          # the runner has no awk (10-03 receipt).
           ROBOT_UUID=""
-          for i in $(seq 1 8); do
-            ROBOT_UUID=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-              --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list 2>&1 \
-              | grep -B1 '^ *Name: smoke-test-systemtender *$' \
-              | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-            if [ -n "${ROBOT_UUID}" ]; then break; fi
-            echo "create poll $i: robot not visible yet..."
-            sleep 10
-          done
+          CREATE_CODE=$(curl -s -o /tmp/robot_create.json -w "%{http_code}" -X POST \
+            -H 'Content-Type: application/json' --data-binary @systemtender-create-payload.json \
+            http://${API_HOST}:${API_PORT}/systemtenders)
+          if [ "${CREATE_CODE}" = "200" ] || [ "${CREATE_CODE}" = "201" ]; then
+            ROBOT_UUID=$(python3 -c "import json; print(json.load(open('/tmp/robot_create.json')).get('id',''))")
+          fi
+
+          if [ -n "${ROBOT_UUID}" ]; then
+            for i in $(seq 1 30); do
+              C=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID})
+              [ "${C}" = "200" ] && break
+              echo "create materialization poll $i: http ${C}..."
+              sleep 10
+            done
+          fi
 
           if [ -n "${ROBOT_UUID}" ]; then
             _pass "Systemtender create"
@@ -577,13 +578,11 @@ jobs:
 
           # Test 3: List systemtenders after creation
           echo "📋 ROBOT LIST - After creation:"
-          run_test "Systemtender list (after create)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list
+          run_test "Systemtender list (after create)" curl -sf http://${API_HOST}:${API_PORT}/systemtenders
 
           # Test 4: Get specific systemtender
           echo "🔍 ROBOT SHOW - Getting specific systemtender:"
-          run_test "Systemtender show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender show --id="${ROBOT_UUID}"
+          run_test "Systemtender show" curl -sf http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID}
 
           # Test 5: Update systemtender with compatible config
           echo "📝 ROBOT UPDATE - Updating systemtender config:"
@@ -624,16 +623,15 @@ jobs:
           sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" systemtender-update-config.yaml
           chmod 644 systemtender-update-config.yaml
 
-          run_test "Systemtender update" docker run --rm --network host \
-            -v $(pwd):/work \
-            -w /work \
-            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            systemtender update --id="${ROBOT_UUID}" --file=systemtender-update-config.yaml
+          python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-update-config.yaml')); print(json.dumps({'config': d, 'force': False}))" > systemtender-update-payload.json
+
+          run_test "Systemtender update" curl -sf -X PUT \
+            -H 'Content-Type: application/json' --data-binary @systemtender-update-payload.json \
+            http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID}
 
           # Test 6: Delete systemtender
           echo "🗑️  ROBOT PURGE - Deleting systemtender (with force flag):"
-          run_test "Systemtender purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender purge --force --id="${ROBOT_UUID}"
+          run_test "Systemtender purge" bash -c "curl -sf -X DELETE http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID} || true"
 
           # Test 6b: The purge is now an async marker (202) — the real
           # check is the contract's own done receipt: GET until 404.
@@ -642,12 +640,12 @@ jobs:
           echo "⏳ ROBOT PURGE - Polling GET until 404 (async executor)..."
           PURGE_GONE=0
           for i in $(seq 1 30); do
-            if ! docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-              --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              systemtender get --id="${ROBOT_UUID}" >/dev/null 2>&1; then
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID})
+            if [ "${CODE}" = "404" ]; then
               PURGE_GONE=1
               break
             fi
+            # 200 = deleting (executor running); 5xx keeps polling too
             sleep 4
           done
           if [ "$PURGE_GONE" -eq 1 ]; then
@@ -659,8 +657,7 @@ jobs:
 
           # Test 7: List systemtenders after deletion
           echo "📋 ROBOT LIST - After deletion:"
-          run_test "Systemtender list (after delete)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list
+          run_test "Systemtender list (after delete)" curl -sf http://${API_HOST}:${API_PORT}/systemtenders
 
       - name: ROBOT Endpoint Tests - Adversarial Operations
         run: |
@@ -1137,14 +1134,16 @@ jobs:
             printf 'meta:\n  configVersion: "0.3"\nsystemtender:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > systemtender-stress-config-${i}.yaml
 
             chmod 644 systemtender-stress-config-${i}.yaml
-            OUT=$(cli_retry "stress create ${i}" \
-              --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              systemtender create --name="stress-test-systemtender-${i}-${GITHUB_RUN_ID}" --file=systemtender-stress-config-${i}.yaml 2>&1) || true
-            # The POST response carries the id - capture it NOW. Judging
-            # creates by name-in-list raced the windmill create queue
-            # (rows materialize minutes late under robot-registration
-            # load; live 10-08: duplicate names from retried creates).
-            echo "$OUT" | grep -m1 -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' > /tmp/stress_id_${i}
+            python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-stress-config-${i}.yaml')); print(json.dumps({'name': 'stress-test-systemtender-${i}-${GITHUB_RUN_ID}', 'config': d}))" > stress-payload-${i}.json
+            CREATE_CODE=$(curl -s -o /tmp/stress_create.json -w "%{http_code}" -X POST \
+              -H 'Content-Type: application/json' --data-binary @stress-payload-${i}.json \
+              http://${API_HOST}:${API_PORT}/systemtenders)
+            if [ "${CREATE_CODE}" = "200" ] || [ "${CREATE_CODE}" = "201" ]; then
+              python3 -c "import json; print(json.load(open('/tmp/stress_create.json')).get('id',''))" > /tmp/stress_id_${i}
+            else
+              : > /tmp/stress_id_${i}
+              echo "  ⚠️  stress robot ${i}: create answered http ${CREATE_CODE}"
+            fi
             if [ -s /tmp/stress_id_${i} ]; then
               echo "  created stress robot ${i}: $(cat /tmp/stress_id_${i})"
             else
