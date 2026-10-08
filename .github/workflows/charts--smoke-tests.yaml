@@ -1074,6 +1074,25 @@ jobs:
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
           API_HOST="${{ env.API_HOST }}"
           API_PORT="${{ env.API_PORT }}"
+
+          # Transport-retry wrapper: the kubectl port-forward tunnel
+          # drops connections under bursty load (live 10-08: "error
+          # sending request" on creates whose rows LANDED server-side -
+          # the messenger failed, not the engine). Retry only the
+          # transport signature; real failures surface unchanged.
+          cli_retry() {
+            local label="$1"; shift
+            local out="" a
+            for a in 1 2 3; do
+              out=$(docker run --rm --network host -v $(pwd):/work -w /work "${CLI_CONTAINER_IMAGE}" "$@" 2>&1)
+              if ! echo "$out" | grep -q "error sending request"; then
+                echo "$out"; return 0
+              fi
+              echo "  ⚠️  transport blip on '$label' (attempt $a) - retrying"
+              sleep 5
+            done
+            echo "$out"; return 1
+          }
           
           # Create multiple systemtenders in succession
           echo "🔨 Creating multiple systemtenders..."
@@ -1093,10 +1112,8 @@ jobs:
             printf 'meta:\n  configVersion: "0.3"\nsystemtender:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > systemtender-stress-config-${i}.yaml
 
             chmod 644 systemtender-stress-config-${i}.yaml
-            docker run --rm --network host \
-              -v $(pwd):/work \
-              -w /work \
-              "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            cli_retry "stress create ${i}" \
+              --hostname=${API_HOST} --port=${API_PORT} --insecure \
               systemtender create --name="stress-test-systemtender-${i}-${GITHUB_RUN_ID}" --file=systemtender-stress-config-${i}.yaml 2>&1 || true
             sleep 2
           done
