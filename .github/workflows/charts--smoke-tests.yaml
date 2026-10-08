@@ -1110,7 +1110,11 @@ jobs:
           # three honest-but-false create failures).
           STRESS_LIST_FILE=/tmp/stress_list.json
           GOOD_LIST=false
-          for i in $(seq 1 12); do
+          # 20 polls x 15s = 5min: create jobs are windmill-enqueued and
+          # materialize when the worker queue drains (observed 10-08:
+          # rows landing minutes after the POST under robot-registration
+          # load; every read is itself a queue job, so poll sparsely).
+          for i in $(seq 1 20); do
             CODE=$(curl -s -o "${STRESS_LIST_FILE}" -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders)
             MISSING=0
             if [ "${CODE}" != "200" ]; then
@@ -1123,7 +1127,7 @@ jobs:
             fi
             if [ "${MISSING}" -eq 0 ]; then break; fi
             echo "stress poll $i: some robots not visible yet (http ${CODE})..."
-            sleep 10
+            sleep 15
           done
 
           for i in {1..5}; do
