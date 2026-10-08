@@ -59,55 +59,50 @@ jobs:
           # Check service endpoint
           kubectl get service godon-api -n godon
 
-      - name: Port Forward to Godon API
+      - name: Expose Godon API via NodePort
         env:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
-          echo "🔗 Setting up port forward to godon-api..."
+          echo "🚪 Exposing godon-api via NodePort (stable door for the smoke)..."
 
-          # Get API pod name
-          API_POD=$(kubectl get pods -n godon -l component=api -o jsonpath='{.items[0].metadata.name}')
-          echo "📦 API Pod: ${API_POD}"
+          # The old door was a kubectl port-forward: a single SPDY
+          # tunnel that dropped connections under burst load (live
+          # 10-08: three smoke runs of rotating create/purge failures
+          # scattered "error sending request" at 127.0.0.2:9090 while
+          # every in-cluster pod stayed healthy). The NodePort door is
+          # kube-proxy iptables - stable across pod restarts and load.
+          #
+          # Scoped to this stack by construction: a runtime Service on
+          # the OSUOSL cluster, nothing in the chart; re-created here
+          # idempotently if a cluster recreation drops it.
+          kubectl -n godon expose deploy godon-api --name godon-api-np \
+            --type NodePort --port 8080 2>/dev/null \
+            || echo "service godon-api-np already exists"
 
-          # Use a dedicated localhost address to avoid conflicts
-          LOCALHOST_ADDR="127.0.0.2"
-          PORT="9090"
+          API_HOST=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+          API_PORT=$(kubectl -n godon get svc godon-api-np -o jsonpath='{.spec.ports[0].nodePort}')
+          echo "🚪 API door: ${API_HOST}:${API_PORT}"
 
-          # Setup port forward in background
-          echo "🔧 Starting port-forward on ${LOCALHOST_ADDR}:${PORT}..."
-          kubectl port-forward -n godon --address ${LOCALHOST_ADDR} "${API_POD}" ${PORT}:8080 > /tmp/pf.log 2>&1 &
-          PF_PID=$!
-          
-          # Give port forward time to establish
-          sleep 3
-
-          echo "✅ Port forward started (PID: ${PF_PID})"
-          echo ${PF_PID} > /tmp/pf_pid
-
-          # Wait for port forward to be ready with proper counter
-          echo "⏳ Waiting for port forward to be ready..."
           READY=false
           for i in $(seq 1 30); do
-            if curl -s -f --connect-timeout 2 http://${LOCALHOST_ADDR}:${PORT}/health >/dev/null 2>&1; then
-              echo "✅ Port forward is ready!"
+            if curl -s -f --connect-timeout 2 http://${API_HOST}:${API_PORT}/health >/dev/null 2>&1; then
+              echo "✅ NodePort door is ready!"
               READY=true
               break
             fi
-            echo "Attempt $i/30 - waiting for port forward..."
+            echo "Attempt $i/30 - waiting for the NodePort door..."
             sleep 2
           done
 
           if [ "$READY" = false ]; then
-            echo "❌ Port forward failed to become ready after 60 seconds"
-            echo "Port-forward logs:"
-            cat /tmp/pf.log
-            kill ${PF_PID} || true
+            echo "❌ NodePort door failed to become ready after 60 seconds"
             exit 1
           fi
 
-          # Export for use in subsequent steps
-          echo "API_HOST=${LOCALHOST_ADDR}" >> $GITHUB_ENV
-          echo "API_PORT=${PORT}" >> $GITHUB_ENV
+          # Export for use in subsequent steps (same env contract as
+          # the old port-forward - everything downstream is unchanged)
+          echo "API_HOST=${API_HOST}" >> $GITHUB_ENV
+          echo "API_PORT=${API_PORT}" >> $GITHUB_ENV
 
       - name: Port Forward to Godon Causal
         env:
