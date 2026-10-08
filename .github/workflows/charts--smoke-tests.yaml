@@ -59,55 +59,50 @@ jobs:
           # Check service endpoint
           kubectl get service godon-api -n godon
 
-      - name: Port Forward to Godon API
+      - name: Expose Godon API via NodePort
         env:
           KUBECONFIG: /tmp/kind_kubeconfig.yaml
         run: |
-          echo "🔗 Setting up port forward to godon-api..."
+          echo "🚪 Exposing godon-api via NodePort (stable door for the smoke)..."
 
-          # Get API pod name
-          API_POD=$(kubectl get pods -n godon -l component=api -o jsonpath='{.items[0].metadata.name}')
-          echo "📦 API Pod: ${API_POD}"
+          # The old door was a kubectl port-forward: a single SPDY
+          # tunnel that dropped connections under burst load (live
+          # 10-08: three smoke runs of rotating create/purge failures
+          # scattered "error sending request" at 127.0.0.2:9090 while
+          # every in-cluster pod stayed healthy). The NodePort door is
+          # kube-proxy iptables - stable across pod restarts and load.
+          #
+          # Scoped to this stack by construction: a runtime Service on
+          # the OSUOSL cluster, nothing in the chart; re-created here
+          # idempotently if a cluster recreation drops it.
+          kubectl -n godon expose deploy godon-api --name godon-api-np \
+            --type NodePort --port 8080 2>/dev/null \
+            || echo "service godon-api-np already exists"
 
-          # Use a dedicated localhost address to avoid conflicts
-          LOCALHOST_ADDR="127.0.0.2"
-          PORT="9090"
+          API_HOST=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+          API_PORT=$(kubectl -n godon get svc godon-api-np -o jsonpath='{.spec.ports[0].nodePort}')
+          echo "🚪 API door: ${API_HOST}:${API_PORT}"
 
-          # Setup port forward in background
-          echo "🔧 Starting port-forward on ${LOCALHOST_ADDR}:${PORT}..."
-          kubectl port-forward -n godon --address ${LOCALHOST_ADDR} "${API_POD}" ${PORT}:8080 > /tmp/pf.log 2>&1 &
-          PF_PID=$!
-          
-          # Give port forward time to establish
-          sleep 3
-
-          echo "✅ Port forward started (PID: ${PF_PID})"
-          echo ${PF_PID} > /tmp/pf_pid
-
-          # Wait for port forward to be ready with proper counter
-          echo "⏳ Waiting for port forward to be ready..."
           READY=false
           for i in $(seq 1 30); do
-            if curl -s -f --connect-timeout 2 http://${LOCALHOST_ADDR}:${PORT}/health >/dev/null 2>&1; then
-              echo "✅ Port forward is ready!"
+            if curl -s -f --connect-timeout 2 http://${API_HOST}:${API_PORT}/health >/dev/null 2>&1; then
+              echo "✅ NodePort door is ready!"
               READY=true
               break
             fi
-            echo "Attempt $i/30 - waiting for port forward..."
+            echo "Attempt $i/30 - waiting for the NodePort door..."
             sleep 2
           done
 
           if [ "$READY" = false ]; then
-            echo "❌ Port forward failed to become ready after 60 seconds"
-            echo "Port-forward logs:"
-            cat /tmp/pf.log
-            kill ${PF_PID} || true
+            echo "❌ NodePort door failed to become ready after 60 seconds"
             exit 1
           fi
 
-          # Export for use in subsequent steps
-          echo "API_HOST=${LOCALHOST_ADDR}" >> $GITHUB_ENV
-          echo "API_PORT=${PORT}" >> $GITHUB_ENV
+          # Export for use in subsequent steps (same env contract as
+          # the old port-forward - everything downstream is unchanged)
+          echo "API_HOST=${API_HOST}" >> $GITHUB_ENV
+          echo "API_PORT=${API_PORT}" >> $GITHUB_ENV
 
       - name: Port Forward to Godon Causal
         env:
@@ -548,27 +543,28 @@ jobs:
           sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" systemtender-smoke-config.yaml
           chmod 644 systemtender-smoke-config.yaml
 
-          docker run --rm --network host \
-            -v $(pwd):/work \
-            -w /work \
-            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            systemtender create --name="smoke-test-systemtender" --file=systemtender-smoke-config.yaml 2>&1 || true
+          # Direct HTTP: the contract IS this API - no docker hop. The
+          # create is windmill-enqueued - the registry row materializes
+          # when the worker queue drains (observed minutes under load;
+          # live 10-08) - so poll GET-by-id until 200.
+          /run/current-system/sw/bin/python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-smoke-config.yaml')); print(json.dumps({'name': 'smoke-test-systemtender', 'config': d}))" > systemtender-create-payload.json
 
-          # The create can outlive the CLI's 30s patience on a fresh stack
-          # (per-robot archive schema bootstrap); the robot registers in
-          # the registry while the CLI call is still in flight. Poll the
-          # list for the NAMED robot - never trust one shot. grep only:
-          # the runner has no awk (10-03 receipt).
           ROBOT_UUID=""
-          for i in $(seq 1 8); do
-            ROBOT_UUID=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-              --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list 2>&1 \
-              | grep -B1 '^ *Name: smoke-test-systemtender *$' \
-              | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-            if [ -n "${ROBOT_UUID}" ]; then break; fi
-            echo "create poll $i: robot not visible yet..."
-            sleep 10
-          done
+          CREATE_CODE=$(curl -s -o /tmp/robot_create.json -w "%{http_code}" -X POST \
+            -H 'Content-Type: application/json' --data-binary @systemtender-create-payload.json \
+            http://${API_HOST}:${API_PORT}/systemtenders)
+          if [ "${CREATE_CODE}" = "200" ] || [ "${CREATE_CODE}" = "201" ]; then
+            ROBOT_UUID=$(/run/current-system/sw/bin/python3 -c "import json; print(json.load(open('/tmp/robot_create.json')).get('id',''))")
+          fi
+
+          if [ -n "${ROBOT_UUID}" ]; then
+            for i in $(seq 1 30); do
+              C=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID})
+              [ "${C}" = "200" ] && break
+              echo "create materialization poll $i: http ${C}..."
+              sleep 10
+            done
+          fi
 
           if [ -n "${ROBOT_UUID}" ]; then
             _pass "Systemtender create"
@@ -582,13 +578,11 @@ jobs:
 
           # Test 3: List systemtenders after creation
           echo "📋 ROBOT LIST - After creation:"
-          run_test "Systemtender list (after create)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list
+          run_test "Systemtender list (after create)" curl -sf http://${API_HOST}:${API_PORT}/systemtenders
 
           # Test 4: Get specific systemtender
           echo "🔍 ROBOT SHOW - Getting specific systemtender:"
-          run_test "Systemtender show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender show --id="${ROBOT_UUID}"
+          run_test "Systemtender show" curl -sf http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID}
 
           # Test 5: Update systemtender with compatible config
           echo "📝 ROBOT UPDATE - Updating systemtender config:"
@@ -629,16 +623,15 @@ jobs:
           sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" systemtender-update-config.yaml
           chmod 644 systemtender-update-config.yaml
 
-          run_test "Systemtender update" docker run --rm --network host \
-            -v $(pwd):/work \
-            -w /work \
-            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            systemtender update --id="${ROBOT_UUID}" --file=systemtender-update-config.yaml
+          /run/current-system/sw/bin/python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-update-config.yaml')); print(json.dumps({'config': d, 'force': False}))" > systemtender-update-payload.json
+
+          run_test "Systemtender update" curl -sf -X PUT \
+            -H 'Content-Type: application/json' --data-binary @systemtender-update-payload.json \
+            http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID}
 
           # Test 6: Delete systemtender
           echo "🗑️  ROBOT PURGE - Deleting systemtender (with force flag):"
-          run_test "Systemtender purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender purge --force --id="${ROBOT_UUID}"
+          run_test "Systemtender purge" bash -c "curl -sf -X DELETE http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID} || true"
 
           # Test 6b: The purge is now an async marker (202) — the real
           # check is the contract's own done receipt: GET until 404.
@@ -647,12 +640,12 @@ jobs:
           echo "⏳ ROBOT PURGE - Polling GET until 404 (async executor)..."
           PURGE_GONE=0
           for i in $(seq 1 30); do
-            if ! docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-              --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              systemtender get --id="${ROBOT_UUID}" >/dev/null 2>&1; then
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID})
+            if [ "${CODE}" = "404" ]; then
               PURGE_GONE=1
               break
             fi
+            # 200 = deleting (executor running); 5xx keeps polling too
             sleep 4
           done
           if [ "$PURGE_GONE" -eq 1 ]; then
@@ -664,8 +657,7 @@ jobs:
 
           # Test 7: List systemtenders after deletion
           echo "📋 ROBOT LIST - After deletion:"
-          run_test "Systemtender list (after delete)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list
+          run_test "Systemtender list (after delete)" curl -sf http://${API_HOST}:${API_PORT}/systemtenders
 
       - name: ROBOT Endpoint Tests - Adversarial Operations
         run: |
@@ -1074,6 +1066,48 @@ jobs:
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
           API_HOST="${{ env.API_HOST }}"
           API_PORT="${{ env.API_PORT }}"
+
+          # Transport-retry wrapper: the kubectl port-forward tunnel
+          # drops connections under bursty load (live 10-08: "error
+          # sending request" on creates whose rows LANDED server-side -
+          # the messenger failed, not the engine). Retry only the
+          # transport signature; real failures surface unchanged.
+          cli_retry() {
+            local label="$1"; shift
+            local out="" a
+            for a in 1 2 3; do
+              out=$(docker run --rm --network host -v $(pwd):/work -w /work "${CLI_CONTAINER_IMAGE}" "$@" 2>&1)
+              if ! echo "$out" | grep -q "error sending request"; then
+                echo "$out"; return 0
+              fi
+              echo "  ⚠️  transport blip on '$label' (attempt $a) - retrying"
+              sleep 5
+            done
+            echo "$out"; return 1
+          }
+
+          # Purge by id with the full lifecycle: a windmill-enqueued
+          # create materializes minutes late - a 404 before the first
+          # 200 means "still queued", not gone. DELETE is the marker
+          # (202), GET-404 the done receipt (real 404s since api
+          # 0.0.31, #353). 0 when gone, 1 when the window closed.
+          purge_by_id() {
+            local id="$1" t code seen=false
+            for t in $(seq 1 28); do
+              code=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${id})
+              if [ "$code" = "200" ]; then seen=true; break; fi
+              sleep 15
+            done
+            [ "$seen" = true ] || return 1
+            for t in $(seq 1 12); do
+              curl -s -X DELETE -o /dev/null http://${API_HOST}:${API_PORT}/systemtenders/${id} || true
+              code=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${id})
+              [ "$code" = "404" ] && return 0
+              sleep 10
+            done
+            return 1
+          }
+
           
           # Create multiple systemtenders in succession
           echo "🔨 Creating multiple systemtenders..."
@@ -1086,70 +1120,76 @@ jobs:
           fi
           echo "Using target ID for stress test systemtenders: ${TARGET_ID}"
 
-          ROBOT_STRESS_PASS=0
-          ROBOT_STRESS_FAIL=0
+          # CLEAN-ROOM SWEEP: whatever tenders exist right now get
+          # purged - the assertions at the end of this block must
+          # measure only THIS run's objects. (Live 10-08: a leftover
+          # from a failed prior run made the registry assertion flag
+          # an object this run never created.)
+          for ID in $(curl -s http://${API_HOST}:${API_PORT}/systemtenders | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | sort -u); do
+            echo "  🧹 sweeping pre-existing tender ${ID}"
+            purge_by_id "$ID" || _fail "Clean-room sweep of ${ID}"
+          done
 
           for i in {1..5}; do
             printf 'meta:\n  configVersion: "0.3"\nsystemtender:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > systemtender-stress-config-${i}.yaml
 
             chmod 644 systemtender-stress-config-${i}.yaml
-            docker run --rm --network host \
-              -v $(pwd):/work \
-              -w /work \
-              "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-              systemtender create --name="stress-test-systemtender-${i}-${GITHUB_RUN_ID}" --file=systemtender-stress-config-${i}.yaml 2>&1 || true
+            /run/current-system/sw/bin/python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-stress-config-${i}.yaml')); print(json.dumps({'name': 'stress-test-systemtender-${i}-${GITHUB_RUN_ID}', 'config': d}))" > stress-payload-${i}.json
+            CREATE_CODE=$(curl -s -o /tmp/stress_create.json -w "%{http_code}" -X POST \
+              -H 'Content-Type: application/json' --data-binary @stress-payload-${i}.json \
+              http://${API_HOST}:${API_PORT}/systemtenders)
+            if [ "${CREATE_CODE}" = "200" ] || [ "${CREATE_CODE}" = "201" ]; then
+              /run/current-system/sw/bin/python3 -c "import json; print(json.load(open('/tmp/stress_create.json')).get('id',''))" > /tmp/stress_id_${i}
+            else
+              : > /tmp/stress_id_${i}
+              echo "  ⚠️  stress robot ${i}: create answered http ${CREATE_CODE}"
+            fi
+            if [ -s /tmp/stress_id_${i} ]; then
+              echo "  created stress robot ${i}: $(cat /tmp/stress_id_${i})"
+            else
+              echo "  ⚠️  stress robot ${i}: no id in create response"
+            fi
             sleep 2
           done
 
-          # Same patience as the main create: stress robots appear with
-          # lag while their creates finish server-side. Poll until all
-          # five are visible or the budget is spent, then judge.
-          STRESS_LIST=""
-          for i in $(seq 1 8); do
-            STRESS_LIST=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-              --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list 2>&1)
-            MISSING=0
+          # Materialize-all: the enqueued creates land when the worker
+          # queue drains (observed up to ~7 min under robot-registration
+          # load; every read is itself a queue job - poll sparsely).
+          ALL_MATERIALIZED=false
+          for t in $(seq 1 28); do
+            ALL=200
             for j in {1..5}; do
-              echo "${STRESS_LIST}" | grep -q "stress-test-systemtender-${j}-${GITHUB_RUN_ID}" || MISSING=1
+              [ -s /tmp/stress_id_${j} ] || continue
+              code=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/$(cat /tmp/stress_id_${j}))
+              [ "$code" != "200" ] && ALL=1
             done
-            if [ "${MISSING}" -eq 0 ]; then break; fi
-            echo "stress poll $i: some robots not visible yet..."
-            sleep 10
+            if [ "$ALL" = "200" ]; then ALL_MATERIALIZED=true; break; fi
+            echo "  materialization poll ${t}..."
+            sleep 15
           done
 
           for i in {1..5}; do
-            if echo "${STRESS_LIST}" | grep -q "stress-test-systemtender-${i}-${GITHUB_RUN_ID}"; then
+            if [ -s /tmp/stress_id_${i} ]; then
               _pass "Stress systemtender ${i} create"
             else
               _fail "Stress systemtender ${i} create"
             fi
           done
 
-          # Clean up: purge the stress robots this run created. A smoke
-          # run must not leak load into the next - leftover robots grind
-          # trials against the shared archive DB and slow every later
-          # create (receipts 10-03: 24s request-to-script under zombie
-          # load). Purge with poll-until-gone, same as the main robot.
-          for i in {1..5}; do
-            STRESS_UUID=$(echo "${STRESS_LIST}" \
-              | grep -B1 "Name: stress-test-systemtender-${i}-${GITHUB_RUN_ID}" \
-              | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-            if [ -z "${STRESS_UUID}" ]; then continue; fi
-            STRESS_GONE=false
-            for t in $(seq 1 6); do
-              curl_out=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-                --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender purge --force --id="${STRESS_UUID}" 2>&1 || true)
-              if ! docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-                --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender show --id="${STRESS_UUID}" >/dev/null 2>&1; then
-                STRESS_GONE=true
-                break
-              fi
-              sleep 10
-            done
-            if [ "${STRESS_GONE}" = true ]; then
-              echo "🧹 stress robot ${i} purged (${STRESS_UUID})"
+          # Clean up: purge the stress robots this run created, by the
+          # ids captured at create time. A smoke run must not leak load
+          # into the next - leftover robots grind trials against the
+          # shared archive DB and slow every later create (receipts
+          # 10-03: 24s request-to-script under zombie load). A miss
+          # inside the window is a FAILURE, not a warning: greens hid
+          # deletion-failed ghosts behind this line for weeks (live
+          # receipts 10-06/10-07).
+          for j in {1..5}; do
+            [ -s /tmp/stress_id_${j} ] || continue
+            if purge_by_id "$(cat /tmp/stress_id_${j})"; then
+              echo "🧹 stress robot ${j} purged"
             else
-              echo "⚠️  stress robot ${i} did not purge in window (${STRESS_UUID})"
+              _fail "Stress systemtender ${j} purge (did not clear in window)"
             fi
           done
           
@@ -1195,6 +1235,13 @@ jobs:
           echo "📋 Listing all credentials after stress test:"
           run_test "Credential list (post-stress)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure credential list
+
+          # The contract's last line: the suite leaves NOTHING behind.
+          # Both registries must read empty - residue rows are exactly
+          # how deletion-failed ghosts hid behind green for weeks (live
+          # receipts 10-06/10-07: green smokes, 5-6 ghost rows each).
+          run_test "Systemtender registry empty (no residue)" bash -c "OUT=\$(curl -sf http://${API_HOST}:${API_PORT}/systemtenders) || exit 1; ! echo \"\$OUT\" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
+          run_test "Steerwish registry empty (no residue)" bash -c "OUT=\$(curl -sf http://${API_HOST}:${API_PORT}/steerwishes) || exit 1; ! echo \"\$OUT\" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
 
       - name: Verify Test Results
         if: always()
