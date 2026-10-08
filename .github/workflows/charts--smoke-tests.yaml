@@ -1103,22 +1103,31 @@ jobs:
 
           # Same patience as the main create: stress robots appear with
           # lag while their creates finish server-side. Poll until all
-          # five are visible or the budget is spent, then judge.
-          STRESS_LIST=""
-          for i in $(seq 1 8); do
-            STRESS_LIST=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-              --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list 2>&1)
+          # five are visible or the budget is spent, then judge. Probe
+          # via HTTP status: a transport error (port-forward blip) is a
+          # retriable probe, never evidence - the docker-run list calls
+          # poisoned the evidence on connection errors (live 10-08:
+          # three honest-but-false create failures).
+          STRESS_LIST_FILE=/tmp/stress_list.json
+          GOOD_LIST=false
+          for i in $(seq 1 12); do
+            CODE=$(curl -s -o "${STRESS_LIST_FILE}" -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders)
             MISSING=0
-            for j in {1..5}; do
-              echo "${STRESS_LIST}" | grep -q "stress-test-systemtender-${j}-${GITHUB_RUN_ID}" || MISSING=1
-            done
+            if [ "${CODE}" != "200" ]; then
+              MISSING=1
+            else
+              GOOD_LIST=true
+              for j in {1..5}; do
+                grep -q "stress-test-systemtender-${j}-${GITHUB_RUN_ID}" "${STRESS_LIST_FILE}" || MISSING=1
+              done
+            fi
             if [ "${MISSING}" -eq 0 ]; then break; fi
-            echo "stress poll $i: some robots not visible yet..."
+            echo "stress poll $i: some robots not visible yet (http ${CODE})..."
             sleep 10
           done
 
           for i in {1..5}; do
-            if echo "${STRESS_LIST}" | grep -q "stress-test-systemtender-${i}-${GITHUB_RUN_ID}"; then
+            if [ "${GOOD_LIST}" = true ] && grep -q "stress-test-systemtender-${i}-${GITHUB_RUN_ID}" "${STRESS_LIST_FILE}"; then
               _pass "Stress systemtender ${i} create"
             else
               _fail "Stress systemtender ${i} create"
@@ -1129,24 +1138,25 @@ jobs:
           # run must not leak load into the next - leftover robots grind
           # trials against the shared archive DB and slow every later
           # create (receipts 10-03: 24s request-to-script under zombie
-          # load). Purge with poll-until-gone, same as the main robot.
-          # A miss inside the window is a FAILURE, not a warning: greens
-          # hid deletion-failed ghosts behind this line for weeks (live
-          # receipts 10-06/10-07).
+          # load). DELETE is the marker (202), GET-404 is the done
+          # receipt; transport errors are retriable probes, never
+          # evidence of either state. A miss inside the window is a
+          # FAILURE, not a warning: greens hid deletion-failed ghosts
+          # behind this line for weeks (live receipts 10-06/10-07).
           for i in {1..5}; do
-            STRESS_UUID=$(echo "${STRESS_LIST}" \
-              | grep -B1 "Name: stress-test-systemtender-${i}-${GITHUB_RUN_ID}" \
-              | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+            STRESS_NAME=$(grep -oE "stress-test-systemtender-[0-9]-${GITHUB_RUN_ID}" "${STRESS_LIST_FILE}" | sed -n "${i}p")
+            if [ -z "${STRESS_NAME}" ]; then continue; fi
+            STRESS_UUID=$(python3 -c "import json; rs=json.load(open('${STRESS_LIST_FILE}')); print(next((r['id'] for r in rs if r['name']=='${STRESS_NAME}'), ''))")
             if [ -z "${STRESS_UUID}" ]; then continue; fi
             STRESS_GONE=false
             for t in $(seq 1 9); do
-              curl_out=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-                --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender purge --force --id="${STRESS_UUID}" 2>&1 || true)
-              if ! docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-                --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender show --id="${STRESS_UUID}" >/dev/null 2>&1; then
+              curl -s -X DELETE -o /dev/null http://${API_HOST}:${API_PORT}/systemtenders/${STRESS_UUID} || true
+              CODE=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${STRESS_UUID})
+              if [ "${CODE}" = "404" ]; then
                 STRESS_GONE=true
                 break
               fi
+              # 200 = still deleting; 000/5xx = transport - keep polling
               sleep 10
             done
             if [ "${STRESS_GONE}" = true ]; then
