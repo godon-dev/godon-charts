@@ -8,8 +8,8 @@
 ########################################
 windmill:
   windmill:
-    # Use specific Windmill version for OSUOSL
-    tag: "1.601.1"
+    # Windmill version aligned with the chart pin (charts/godon/values.yaml)
+    tag: "1.623.1"
 
     # Disable LSP replicas for test environment
     lspReplicas: 0
@@ -17,7 +17,7 @@ windmill:
   # Override PostgreSQL version
   postgresql:
     image:
-      tag: "14"
+      tag: "16"
 
 ########################################
 ## Component | Knowledge Archive Database for Cooperating Config Robots
