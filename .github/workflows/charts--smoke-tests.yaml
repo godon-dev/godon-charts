@@ -543,28 +543,34 @@ jobs:
           sed -i "s/PLACEHOLDER_TARGET_ID/${TARGET_ID}/" systemtender-smoke-config.yaml
           chmod 644 systemtender-smoke-config.yaml
 
-          # Direct HTTP: the contract IS this API - no docker hop. The
-          # create is windmill-enqueued - the registry row materializes
-          # when the worker queue drains (observed minutes under load;
-          # live 10-08) - so poll GET-by-id until 200.
-          /run/current-system/sw/bin/python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-smoke-config.yaml')); print(json.dumps({'name': 'smoke-test-systemtender', 'config': d}))" > systemtender-create-payload.json
+          # The contract's client path (designs/2026-10-10): the CLI
+          # carries create/purge - async accept, --wait for the
+          # landing, exit codes for the verdict. The hand-rolled
+          # status whitelist broke on the contract's 202 (live 10-10),
+          # and the row now materializes instantly in `creating`, so a
+          # purge racing the executor would hit the refused claim -
+          # create --wait sequences it instead of bash.
+          # A row left by an aborted prior run would 409 the name:
+          # purge it first.
+          STALE_ID=$(curl -s http://${API_HOST}:${API_PORT}/systemtenders | jq -r '[.[] | select(.name=="smoke-test-systemtender") | .id][0]' 2>/dev/null || echo "")
+          if [ -n "${STALE_ID}" ]; then
+            echo "purging stale smoke row from a prior run: ${STALE_ID}"
+            docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+              --hostname=${API_HOST} --port=${API_PORT} --insecure \
+              systemtender purge --id="${STALE_ID}" --force --wait --timeout 120 \
+              || echo "  stale purge unmet (continuing): exit $?"
+          fi
 
           ROBOT_UUID=""
-          CREATE_CODE=$(curl -s -o /tmp/robot_create.json -w "%{http_code}" -X POST \
-            -H 'Content-Type: application/json' --data-binary @systemtender-create-payload.json \
-            http://${API_HOST}:${API_PORT}/systemtenders)
-          if [ "${CREATE_CODE}" = "200" ] || [ "${CREATE_CODE}" = "201" ]; then
-            ROBOT_UUID=$(/run/current-system/sw/bin/python3 -c "import json; print(json.load(open('/tmp/robot_create.json')).get('id',''))")
+          if docker run --rm --network host \
+            -v "$(pwd)/systemtender-smoke-config.yaml:/smoke-config.yaml:ro" \
+            "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            systemtender create --name="smoke-test-systemtender" --file=/smoke-config.yaml \
+            --wait --timeout 120 > /tmp/robot_create_cli.txt 2>&1; then
+            ROBOT_UUID=$(grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' /tmp/robot_create_cli.txt | head -1 || echo "")
           fi
-
-          if [ -n "${ROBOT_UUID}" ]; then
-            for i in $(seq 1 30); do
-              C=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID})
-              [ "${C}" = "200" ] && break
-              echo "create materialization poll $i: http ${C}..."
-              sleep 10
-            done
-          fi
+          cat /tmp/robot_create_cli.txt
 
           if [ -n "${ROBOT_UUID}" ]; then
             _pass "Systemtender create"
@@ -629,29 +635,18 @@ jobs:
             -H 'Content-Type: application/json' --data-binary @systemtender-update-payload.json \
             http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID}
 
-          # Test 6: Delete systemtender
-          echo "🗑️  ROBOT PURGE - Deleting systemtender (with force flag):"
-          run_test "Systemtender purge" bash -c "curl -sf -X DELETE http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID} || true"
-
-          # Test 6b: The purge is now an async marker (202) — the real
-          # check is the contract's own done receipt: GET until 404.
-          # The registry row is removed last, only after the archive DB
-          # drop succeeded, so 404 proves the whole executor chain ran.
-          echo "⏳ ROBOT PURGE - Polling GET until 404 (async executor)..."
-          PURGE_GONE=0
-          for i in $(seq 1 30); do
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID})
-            if [ "${CODE}" = "404" ]; then
-              PURGE_GONE=1
-              break
-            fi
-            # 200 = deleting (executor running); 5xx keeps polling too
-            sleep 4
-          done
-          if [ "$PURGE_GONE" -eq 1 ]; then
+          # Test 6: Delete systemtender through the CLI, to the
+          # contract's own done receipt: purge --wait polls GET until
+          # 404 (the registry row is removed last, only after the
+          # archive DB drop, so 404 proves the executor chain ran).
+          # Exit 0 = gone; anything else carries state + reason.
+          echo "🗑️  ROBOT PURGE - Deleting systemtender (force, wait to 404)..."
+          if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            systemtender purge --id=${ROBOT_UUID} --force --wait --timeout 120; then
             echo "✅ PASS: systemtender fully purged (GET 404 after async executor finished)"
           else
-            echo "❌ FAIL: systemtender still present after 120s — async purge did not complete"
+            echo "❌ FAIL: purge --wait unmet — systemtender still present"
             exit 1
           fi
 
@@ -1086,23 +1081,28 @@ jobs:
             echo "$out"; return 1
           }
 
-          # Purge by id with the full lifecycle: a windmill-enqueued
-          # create materializes minutes late - a 404 before the first
-          # 200 means "still queued", not gone. DELETE is the marker
-          # (202), GET-404 the done receipt (real 404s since api
-          # 0.0.31, #353). 0 when gone, 1 when the window closed.
+          # Purge by id through the CLI (designs/2026-10-10): purge
+          # --wait owns the marker and the GET-404 done receipt (real
+          # 404s since api 0.0.31, #353). One guard first: a row still
+          # `creating` refuses the deletion claim (single-flight
+          # lifecycle) - wait out the create executor, then purge.
+          # 0 when gone, 1 when the window closed.
           purge_by_id() {
-            local id="$1" t code seen=false
-            for t in $(seq 1 28); do
-              code=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${id})
-              if [ "$code" = "200" ]; then seen=true; break; fi
-              sleep 15
-            done
-            [ "$seen" = true ] || return 1
-            for t in $(seq 1 12); do
-              curl -s -X DELETE -o /dev/null http://${API_HOST}:${API_PORT}/systemtenders/${id} || true
+            local id="$1" t code status
+            for t in $(seq 1 24); do
               code=$(curl -s -o /dev/null -w "%{http_code}" http://${API_HOST}:${API_PORT}/systemtenders/${id})
               [ "$code" = "404" ] && return 0
+              if [ "$code" = "200" ]; then
+                status=$(curl -s http://${API_HOST}:${API_PORT}/systemtenders/${id} | jq -r '.status' 2>/dev/null || echo "")
+                [ -n "${status}" ] && [ "${status}" != "creating" ] && break
+              fi
+              sleep 5
+            done
+            for t in 1 2 3; do
+              docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+                --hostname=${API_HOST} --port=${API_PORT} --insecure \
+                systemtender purge --id="${id}" --force --wait --timeout 120 \
+                && return 0
               sleep 10
             done
             return 1
@@ -1134,15 +1134,19 @@ jobs:
             printf 'meta:\n  configVersion: "0.3"\nsystemtender:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > systemtender-stress-config-${i}.yaml
 
             chmod 644 systemtender-stress-config-${i}.yaml
-            /run/current-system/sw/bin/python3 -c "import yaml,json; d=yaml.safe_load(open('systemtender-stress-config-${i}.yaml')); print(json.dumps({'name': 'stress-test-systemtender-${i}-${GITHUB_RUN_ID}', 'config': d}))" > stress-payload-${i}.json
-            CREATE_CODE=$(curl -s -o /tmp/stress_create.json -w "%{http_code}" -X POST \
-              -H 'Content-Type: application/json' --data-binary @stress-payload-${i}.json \
-              http://${API_HOST}:${API_PORT}/systemtenders)
-            if [ "${CREATE_CODE}" = "200" ] || [ "${CREATE_CODE}" = "201" ]; then
-              /run/current-system/sw/bin/python3 -c "import json; print(json.load(open('/tmp/stress_create.json')).get('id',''))" > /tmp/stress_id_${i}
+            # Bare async create via the CLI (designs/2026-10-10):
+            # accept + row print + exit code; uuid greppable. The
+            # 200/201 whitelist died with the contract's 202.
+            cli_retry "stress create ${i}" \
+              --hostname=${API_HOST} --port=${API_PORT} --insecure \
+              systemtender create --name="stress-test-systemtender-${i}-${GITHUB_RUN_ID}" \
+              --file=systemtender-stress-config-${i}.yaml \
+              > /tmp/stress_create_cli_${i}.txt
+            if grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' /tmp/stress_create_cli_${i}.txt; then
+              grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' /tmp/stress_create_cli_${i}.txt | head -1 > /tmp/stress_id_${i}
             else
               : > /tmp/stress_id_${i}
-              echo "  ⚠️  stress robot ${i}: create answered http ${CREATE_CODE}"
+              echo "  ⚠️  stress robot ${i}: create unmet:" && cat /tmp/stress_create_cli_${i}.txt
             fi
             if [ -s /tmp/stress_id_${i} ]; then
               echo "  created stress robot ${i}: $(cat /tmp/stress_id_${i})"
