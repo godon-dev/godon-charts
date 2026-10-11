@@ -155,10 +155,6 @@ jobs:
             type: linux_performance
           run:
             parallel: 1
-            completion:
-              iterations:
-                min: 10
-                max: 100
           effectuation:
             targetRefs:
               - "PLACEHOLDER_TARGET_ID"
@@ -513,10 +509,6 @@ jobs:
             type: linux_performance
           run:
             parallel: 1
-            completion:
-              iterations:
-                min: 10
-                max: 100
           effectuation:
             targetRefs:
               - "PLACEHOLDER_TARGET_ID"
@@ -599,10 +591,6 @@ jobs:
             type: linux_performance
           run:
             parallel: 1
-            completion:
-              iterations:
-                min: 20
-                max: 200
           effectuation:
             targetRefs:
               - "PLACEHOLDER_TARGET_ID"
@@ -1131,7 +1119,7 @@ jobs:
           done
 
           for i in {1..5}; do
-            printf 'meta:\n  configVersion: "0.3"\nsystemtender:\n  type: linux_performance\nrun:\n  parallel: 1\n  completion:\n    iterations:\n      min: 10\n      max: 50\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > systemtender-stress-config-${i}.yaml
+            printf 'meta:\n  configVersion: "0.3"\nsystemtender:\n  type: linux_performance\nrun:\n  parallel: 1\neffectuation:\n  targetRefs:\n    - "%s"\ncooperation:\n  active: false\nobjectives:\n  - name: stress_test_metric\n    direction: minimize\n    reconnaissance:\n      service: prometheus\n      query: "scalar(stress_test_metric)"\nsettings:\n  sysctl:\n    vm.swappiness:\n      constraints:\n        - step: 1\n          lower: 0\n          upper: 100\n' "${TARGET_ID}" > systemtender-stress-config-${i}.yaml
 
             chmod 644 systemtender-stress-config-${i}.yaml
             # Bare async create via the CLI (designs/2026-10-10):
