@@ -38,7 +38,7 @@ godon_seeder:
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
   - name: CONTROLLER_VERSION
-    value: "0.59.19"
+    value: "0.59.20"
   - name: ROBOT_VERSION
     value: "0.170.14"
   # Fresh-Windmill boot tolerance: first boot runs DB migrations
@@ -61,17 +61,57 @@ windmill:
     lspReplicas: 1
     databaseUrl: "postgres://windmill:windmill@godon-windmill-db:5432/windmill?sslmode=disable"
     workerGroups:
-      # Controller workers - handle fast operations (preflight, robot_create, etc)
+      # Fast lane - the door and the reads. Seconds-work only; the slow
+      # halves (create executor table builds, delete quiesce guard) ride
+      # controller-slow so a long job can never block a request path
+      # (receipt 2026-10-12: a fourth concurrent create queued 64s past
+      # the api's sync budget behind three executors on one shared lane).
       # Timeout hierarchy: Script-level > Worker group DEFAULT_TIMEOUT_SECONDS > Global default
-      - name: "controller"
-        replicas: 3
+      - name: "controller-fast"
+        replicas: 5
         extraEnv:
         - name: WORKER_GROUP
-          value: "controller"
+          value: "controller-fast"
         - name: WORKER_TAGS
-          value: "controller"
+          value: "controller-fast"
         - name: DEFAULT_TIMEOUT_SECONDS
-          value: "120"  # 2 minutes - fast controller operations
+          value: "60"  # matches the api's sync budget - fast work is validate-and-insert or a read
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://godon-observability-opentelemetry-collector.godon-observability.svc.cluster.local:4318"
+        - name: OTEL_SERVICE_NAME
+          value: "godon-controller"
+        - name: GODON_CAUSAL_URL
+          value: "http://godon-causal:9091"
+        - name: GODON_ARCHIVE_DB_SERVICE_HOST
+          value: "yb-tservers.godon.svc.cluster.local"
+        - name: GODON_ARCHIVE_DB_SERVICE_PORT
+          value: "5433"
+        - name: GODON_ARCHIVE_DB_USER
+          value: "yugabyte"
+        - name: GODON_ARCHIVE_DB_PASSWORD
+          value: "yugabyte"
+        - name: WHITELIST_ENVS
+          value: "OTEL_EXPORTER_OTLP_ENDPOINT,OTEL_SERVICE_NAME,GODON_API_SERVICE_PORT,GODON_METADATA_DB_SERVICE_PORT,YB_TSERVER_SERVICE_SERVICE_PORT,GODON_API_SERVICE_HOST,GODON_METADATA_DB_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_PORT_TCP_YSQL_PORT,GODON_ARCHIVE_DB_SERVICE_HOST,GODON_ARCHIVE_DB_SERVICE_PORT,GODON_ARCHIVE_DB_USER,GODON_ARCHIVE_DB_PASSWORD,GODON_CAUSAL_URL"
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+
+      # Slow lane - the heavy halves of controller lifecycle operations:
+      # the create executor (archive-DB table builds, observed 40-120s)
+      # and the delete (quiesce guard). Same env as the fast lane.
+      - name: "controller-slow"
+        replicas: 5
+        extraEnv:
+        - name: WORKER_GROUP
+          value: "controller-slow"
+        - name: WORKER_TAGS
+          value: "controller-slow"
+        - name: DEFAULT_TIMEOUT_SECONDS
+          value: "600"  # 10 minutes - executor table builds and guarded deletes
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://godon-observability-opentelemetry-collector.godon-observability.svc.cluster.local:4318"
         - name: OTEL_SERVICE_NAME
