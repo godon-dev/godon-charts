@@ -70,6 +70,15 @@ jobs:
           kubectl -n godon-observability delete secret --all || true
           sleep 2
           
+          # A failed helm uninstall (resources deleted by force outside
+          # helm's watch) leaves the release record stuck in
+          # "uninstalling" forever — the next install then dies on
+          # "cannot re-use a name that is still in use". With the
+          # namespace emptied above, purge the lingering record.
+          echo "🗑️ Purging stuck helm release records..."
+          kubectl -n godon delete secret -l owner=helm,name=godon --ignore-not-found || true
+          kubectl -n godon-observability delete secret -l owner=helm,name=godon-observability --ignore-not-found || true
+          
           echo "🧹 Cleaning up hostPath data from KIND nodes..."
           for node in $(kind get nodes --name godon-1-cluster); do
             echo "Cleaning up node: $node"
