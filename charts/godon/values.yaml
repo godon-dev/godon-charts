@@ -196,7 +196,7 @@ windmill:
 observer:
   image:
     repository: "ghcr.io/godon-dev/godon-observer"
-    tag: "0.72.1"
+    tag: "0.72.2"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -256,7 +256,7 @@ observer:
 causal:
   image:
     repository: "ghcr.io/godon-dev/godon-causal"
-    tag: "0.22.19"
+    tag: "0.22.20"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
