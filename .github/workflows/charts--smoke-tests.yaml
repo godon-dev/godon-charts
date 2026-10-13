@@ -924,7 +924,7 @@ jobs:
           # Test 2: Declare a wish
           echo "🌱 WISH DECLARE - Declaring test wish:"
 
-          printf 'claims:\n  - outcome: "chainend.shift"\n    band:\n      lo: -0.14\n      hi: -0.06\n      target: -0.10\nterms: []\nlimits:\n  exclude: []\n  maxChange: 0.5\nbudget: 2\nregime: standing\n' > wish-test.yaml
+          printf 'type: steer\nclaims:\n  - outcome: "chainend.shift"\n    band:\n      lo: -0.14\n      hi: -0.06\n      target: -0.10\nterms: []\nlimits:\n  exclude: []\n  maxChange: 0.5\nbudget: 2\nregime: standing\n' > wish-test.yaml
 
           chmod 644 wish-test.yaml
 
@@ -966,7 +966,7 @@ jobs:
 
           # Test 5: Malformed wish (band missing) must be rejected
           echo "🧪 TEST: WISH DECLARE without band (should reject):"
-          printf 'claims:\n  - outcome: "chainend.shift"\n' > wish-malformed.yaml
+          printf 'type: steer\nclaims:\n  - outcome: "chainend.shift"\n' > wish-malformed.yaml
           chmod 644 wish-malformed.yaml
           if docker run --rm --network host \
             -v $(pwd):/work:ro \
