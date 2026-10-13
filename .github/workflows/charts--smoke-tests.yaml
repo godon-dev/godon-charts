@@ -905,39 +905,39 @@ jobs:
           
           echo "✅ CREDENTIAL adversarial operations completed"
 
-      - name: STEERWISH Endpoint Tests - Regular Operations
+      - name: WISH Endpoint Tests - Regular Operations
         run: |
           set +e
           source /tmp/smoke-test-helpers.sh
-          echo "🌱 Testing STEERWISH endpoints - Regular Operations"
+          echo "🌱 Testing WISH endpoints - Regular Operations"
           echo "===================================================="
 
           CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
           API_HOST="${{ env.API_HOST }}"
           API_PORT="${{ env.API_PORT }}"
 
-          # Test 1: List steerwishes (initial state)
-          echo "📋 STEERWISH LIST - Initial state:"
-          run_test "Steerwish list (initial)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+          # Test 1: List wishes (initial state)
+          echo "📋 WISH LIST - Initial state:"
+          run_test "Wish list (initial)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure wish list
 
-          # Test 2: Declare a steerwish
-          echo "🌱 STEERWISH DECLARE - Declaring test wish:"
+          # Test 2: Declare a wish
+          echo "🌱 WISH DECLARE - Declaring test wish:"
 
-          printf 'claims:\n  - outcome: "chainend.shift"\n    band:\n      lo: -0.14\n      hi: -0.06\n      target: -0.10\nterms: []\nlimits:\n  exclude: []\n  maxChange: 0.5\nbudget: 2\nregime: standing\n' > steerwish-test.yaml
+          printf 'claims:\n  - outcome: "chainend.shift"\n    band:\n      lo: -0.14\n      hi: -0.06\n      target: -0.10\nterms: []\nlimits:\n  exclude: []\n  maxChange: 0.5\nbudget: 2\nregime: standing\n' > wish-test.yaml
 
-          chmod 644 steerwish-test.yaml
+          chmod 644 wish-test.yaml
 
           DECLARE_OUTPUT=$(docker run --rm --network host \
             -v $(pwd):/work:ro \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            wish declare --file=steerwish-test.yaml 2>&1)
+            wish declare --file=wish-test.yaml 2>&1)
 
           if [ $? -eq 0 ]; then
-            _pass "Steerwish declare"
+            _pass "Wish declare"
           else
-            _fail "Steerwish declare"
+            _fail "Wish declare"
           fi
           echo "${DECLARE_OUTPUT}"
 
@@ -945,71 +945,71 @@ jobs:
           WISH_ID=$(echo "${DECLARE_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
 
           if [ -z "${WISH_ID}" ]; then
-            _fail "Extract steerwish ID"
+            _fail "Extract wish ID"
             echo "⚠️  Using placeholder for further tests"
             WISH_ID="550e8400-e29b-41d4-a716-446655440020"
           else
-            _pass "Extract steerwish ID"
-            echo "✅ Steerwish declared with ID: ${WISH_ID}"
-            echo "${WISH_ID}" > /tmp/steerwish_id
+            _pass "Extract wish ID"
+            echo "✅ Wish declared with ID: ${WISH_ID}"
+            echo "${WISH_ID}" > /tmp/wish_id
           fi
 
-          # Test 3: List steerwishes after declaration
-          echo "📋 STEERWISH LIST - After declaration:"
-          run_test "Steerwish list (after declare)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+          # Test 3: List wishes after declaration
+          echo "📋 WISH LIST - After declaration:"
+          run_test "Wish list (after declare)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure wish list
 
-          # Test 4: Show the steerwish (event history: declared)
-          echo "🔍 STEERWISH SHOW - Event history:"
-          run_test "Steerwish show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+          # Test 4: Show the wish (event history: declared)
+          echo "🔍 WISH SHOW - Event history:"
+          run_test "Wish show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure wish show --id="${WISH_ID}"
 
           # Test 5: Malformed wish (band missing) must be rejected
-          echo "🧪 TEST: STEERWISH DECLARE without band (should reject):"
-          printf 'claims:\n  - outcome: "chainend.shift"\n' > steerwish-malformed.yaml
-          chmod 644 steerwish-malformed.yaml
+          echo "🧪 TEST: WISH DECLARE without band (should reject):"
+          printf 'claims:\n  - outcome: "chainend.shift"\n' > wish-malformed.yaml
+          chmod 644 wish-malformed.yaml
           if docker run --rm --network host \
             -v $(pwd):/work:ro \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            wish declare --file=steerwish-malformed.yaml 2>&1; then
+            wish declare --file=wish-malformed.yaml 2>&1; then
             echo "❌ FAIL: Should have rejected a wish without a band"
           else
             echo "✅ PASS: Malformed wish properly rejected"
           fi
 
-          # Test 6: Show non-existent steerwish (should return error)
-          echo "🧪 TEST: STEERWISH SHOW with non-existent UUID (should return error):"
+          # Test 6: Show non-existent wish (should return error)
+          echo "🧪 TEST: WISH SHOW with non-existent UUID (should return error):"
           if docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure wish show --id="00000000-0000-4000-8000-000000000000" 2>&1; then
-            echo "❌ FAIL: Should have returned error for non-existent steerwish"
+            echo "❌ FAIL: Should have returned error for non-existent wish"
           else
-            echo "✅ PASS: Non-existent steerwish properly handled"
+            echo "✅ PASS: Non-existent wish properly handled"
           fi
 
-          # Test 7: Close the steerwish (owner's act - release the hold)
-          echo "🔒 STEERWISH CLOSE - Closing test wish:"
-          run_test "Steerwish close" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+          # Test 7: Close the wish (owner's act - release the hold)
+          echo "🔒 WISH CLOSE - Closing test wish:"
+          run_test "Wish close" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure wish close --id="${WISH_ID}"
 
           # Test 8: Close again - idempotent
-          echo "🔒 STEERWISH CLOSE - Idempotency check:"
-          run_test "Steerwish close (idempotent)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+          echo "🔒 WISH CLOSE - Idempotency check:"
+          run_test "Wish close (idempotent)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure wish close --id="${WISH_ID}"
 
           # Test 9: List after close
-          echo "📋 STEERWISH LIST - After close:"
-          run_test "Steerwish list (after close)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+          echo "📋 WISH LIST - After close:"
+          run_test "Wish list (after close)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure wish list
 
           # Test 10: Purge the wish — async marker (202); verify via the
           # contract's done receipt: GET until 404 (registry row removed
           # last, after the close landed, so 404 proves the executor ran).
-          echo "🗑️  STEERWISH PURGE - Deleting wish (async marker):"
-          run_test "Steerwish purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+          echo "🗑️  WISH PURGE - Deleting wish (async marker):"
+          run_test "Wish purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure wish delete --id="${WISH_ID}"
 
-          echo "⏳ STEERWISH PURGE - Polling GET until 404 (async executor)..."
+          echo "⏳ WISH PURGE - Polling GET until 404 (async executor)..."
           WISH_GONE=0
           for i in $(seq 1 30); do
             if ! docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
@@ -1021,9 +1021,9 @@ jobs:
             sleep 4
           done
           if [ "$WISH_GONE" -eq 1 ]; then
-            echo "✅ PASS: steerwish fully purged (GET 404 after async executor finished)"
+            echo "✅ PASS: wish fully purged (GET 404 after async executor finished)"
           else
-            echo "❌ FAIL: steerwish still present after 120s — async purge did not complete"
+            echo "❌ FAIL: wish still present after 120s — async purge did not complete"
             exit 1
           fi
 
@@ -1221,7 +1221,7 @@ jobs:
           # how deletion-failed ghosts hid behind green for weeks (live
           # receipts 10-06/10-07: green smokes, 5-6 ghost rows each).
           run_test "Systemtender registry empty (no residue)" bash -c "OUT=\$(curl -sf http://${API_HOST}:${API_PORT}/systemtenders) || exit 1; ! echo \"\$OUT\" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
-          run_test "Steerwish registry empty (no residue)" bash -c "OUT=\$(curl -sf http://${API_HOST}:${API_PORT}/steerwishes) || exit 1; ! echo \"\$OUT\" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
+          run_test "Wish registry empty (no residue)" bash -c "OUT=\$(curl -sf http://${API_HOST}:${API_PORT}/wishes) || exit 1; ! echo \"\$OUT\" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
 
       - name: Verify Test Results
         if: always()
