@@ -40,7 +40,7 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.59.24"
   - name: ROBOT_VERSION
-    value: "0.170.18"
+    value: "0.170.19"
   # Fresh-Windmill boot tolerance: first boot runs DB migrations
   # before the auth endpoint answers; give the seeder ~10 minutes.
   - name: SEEDER_MAX_RETRIES
@@ -256,7 +256,7 @@ observer:
 causal:
   image:
     repository: "ghcr.io/godon-dev/godon-causal"
-    tag: "0.22.21"
+    tag: "0.22.22"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
