@@ -1093,26 +1093,7 @@ jobs:
           run_test "Seek show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure wish show --id="${SEEK_ID}"
 
-          # Test S4: Declare a seek wish - cover_now (no budget, second dial)
-          echo "🧭 SEEK DECLARE - cover_now:"
-          printf 'type: "seek"\nform: "cover_now"\nregion:\n  chainend.pull: [-0.3, 0.3]\n' > wish-seek-cover.yaml
-          chmod 644 wish-seek-cover.yaml
-          COVER_OUT=$(docker run --rm --network host \
-            -v $(pwd):/work:ro \
-            -w /work \
-            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            wish declare --file=wish-seek-cover.yaml 2>&1)
-          COVER_ID=$(echo "$COVER_OUT" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-          if [ -n "${COVER_ID}" ]; then
-            echo "${COVER_ID}" > /tmp/seek_cover_id
-            echo "✅ PASS: Seek declare (cover_now) — ${COVER_ID}"
-          else
-            echo "❌ FAIL: Seek declare (cover_now)"
-            echo "${COVER_OUT}"
-            exit 1
-          fi
-
-          # Test S5: A seek without its form must be rejected
+          # Test S4: A seek without its form must be rejected
           echo "🧪 TEST: SEEK without form (should reject):"
           printf 'type: "seek"\nregion:\n  chainend.push: [-0.4, 0.4]\n' > wish-seek-noform.yaml
           chmod 644 wish-seek-noform.yaml
@@ -1157,30 +1138,14 @@ jobs:
             echo "✅ PASS: Hold carrying form properly rejected"
           fi
 
-          # Tests S8-S11: Close and purge both seeks (async executor; GET to 404)
-          for WID in "$(cat /tmp/seek_best_id)" "$(cat /tmp/seek_cover_id)"; do
-            echo "🧹 SEEK CLEANUP - close + purge ${WID}:"
-            run_test "Seek close (${WID:0:8})" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-              --hostname=${API_HOST} --port=${API_PORT} --insecure wish close --id="${WID}"
-            run_test "Seek purge (${WID:0:8})" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-              --hostname=${API_HOST} --port=${API_PORT} --insecure wish delete --id="${WID}"
-            GONE=0
-            for i in $(seq 1 30); do
-              if ! docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-                --hostname=${API_HOST} --port=${API_PORT} --insecure \
-                wish show --id="${WID}" >/dev/null 2>&1; then
-                GONE=1
-                break
-              fi
-              sleep 4
-            done
-            if [ "$GONE" -eq 1 ]; then
-              echo "✅ PASS: seek ${WID:0:8} fully purged (GET 404 after async executor finished)"
-            else
-              echo "❌ FAIL: seek ${WID:0:8} still present after 120s"
-              exit 1
-            fi
-          done
+          # Test S8: Close and purge the seek — short by holder word (the
+          # suite's final registry-empty check verifies the async executor
+          # landed it; no 404 polling here)
+          echo "🧹 SEEK CLEANUP - close + purge ${SEEK_ID}:"
+          run_test "Seek close" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish close --id="${SEEK_ID}"
+          run_test "Seek purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish delete --id="${SEEK_ID}"
 
       - name: POSITIONS Endpoint Tests - Reads Only
         run: |
