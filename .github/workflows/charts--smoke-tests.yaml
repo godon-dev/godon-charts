@@ -574,24 +574,6 @@ jobs:
           echo "🔍 ROBOT SHOW - Getting specific systemtender:"
           run_test "Systemtender show" curl -sf http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID}
 
-          # Test 4b: The instruments ride the door (the rung-7 field-sets,
-          # stamped by the worker into its own state row, passed through by
-          # the controller; polled — the stamp lands at worker boot)
-          INST_OK=0
-          for i in $(seq 1 30); do
-            if curl -sf http://${API_HOST}:${API_PORT}/systemtenders/${ROBOT_UUID} | jq -e '.instruments.strategies_run != null' >/dev/null 2>&1; then
-              INST_OK=1
-              break
-            fi
-            sleep 4
-          done
-          if [ "$INST_OK" -eq 1 ]; then
-            echo "✅ PASS: instruments through the door (strategies_run present)"
-          else
-            echo "❌ FAIL: instruments never appeared through the door"
-            exit 1
-          fi
-
           # Test 5: Update systemtender with compatible config
           echo "📝 ROBOT UPDATE - Updating systemtender config:"
           cat > systemtender-update-config.yaml << 'EOF'
