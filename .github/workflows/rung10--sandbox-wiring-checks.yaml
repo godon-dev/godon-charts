@@ -1,0 +1,304 @@
+name: "rung10 -- sandbox wiring checks (scratch windmill)"
+
+# Vessel rung 10, motion 1: the four wiring checks owed by the HELD rust
+# shape (chime designs/2026-10-11-rust-rung-estate-shape.md + the rung-10
+# port plan). Runs a THROWAWAY windmill on this runner -- isolated docker
+# containers named rung10-wm-*, unoccupied ports, no kind/estate resources
+# touched -- and tears everything down afterwards.
+#
+# Checks:
+#   1. empty-body argument flow -- a header-only `# sandbox <image>` script
+#      with no body: the probe reports argv/env/stdin so the wiring truth
+#      is read from its output, not assumed.
+#   2. shell-free image viability -- the probe images are FROM scratch with
+#      a statically linked binary; if they run, no shell is needed.
+#   3. one timed cold pull -- first run on a fresh worker vs second run;
+#      the delta is the crane pull+flatten cost, a number for the record.
+#   4. cancel + timeout under the sandbox -- a sleeping probe is cancelled
+#      via jobs/queue/cancel (enforced kill ladder) and a timeout-capped
+#      script must die at its cap.
+#
+# Registry: a local registry on the host network (localhost registries are
+# treated as HTTP/insecure by crane, so no credentials anywhere). The
+# estate's future engine images on ghcr must be anonymously pullable --
+# that question belongs to the factory motion, not this check.
+#
+# Auth/db wiring note: the windmill API auth header and the scratch
+# database credentials are assembled at RUNTIME (curl config file and a
+# docker env-file) so this file carries no credential-shaped literals.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_version:
+        description: "windmill app version (chart-pin candidate)"
+        default: "1.835.0"
+        type: string
+      server_port:
+        description: "host port for the scratch server"
+        default: "8923"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rung10-wiring-checks
+  cancel-in-progress: true
+
+jobs:
+  wiring-checks:
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 45
+    env:
+      RID: ${{ github.run_id }}
+      SRV_PORT: ${{ inputs.server_port }}
+      PG_PORT: "54329"
+      REG_PORT: "5000"
+      WM_DB_CRED: windmill
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: preflight - versions, ports, prior scratch
+        run: |
+          set -e
+          APPV="${{ inputs.app_version }}"
+          echo "APP_VERSION=$APPV" >> "$GITHUB_ENV"
+          echo "WM_IMAGE=ghcr.io/windmill-labs/windmill-full:$APPV" >> "$GITHUB_ENV"
+          echo "WM_URL=http://localhost:$SRV_PORT" >> "$GITHUB_ENV"
+          for p in "$SRV_PORT" "$PG_PORT" "$REG_PORT"; do
+            if curl -s -o /dev/null --max-time 2 "http://localhost:$p/"; then
+              echo "::error::port $p answers -- pick other ports"; exit 1
+            fi
+          done
+          if docker ps -a --format '{{.Names}}' | grep -q '^rung10-wm-'; then
+            echo "::error::stale rung10-wm-* containers exist"; exit 1
+          fi
+
+      - name: build the two shell-free probe images (FROM scratch)
+        run: |
+          set -e
+          W="/tmp/rung10-probe-$RID"
+          mkdir -p "$W" && cd "$W"
+          cat > probe.c <<'CEOF'
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <unistd.h>
+          extern char **environ;
+          int main(int argc, char **argv) {
+            if (argc > 1 && strcmp(argv[1], "sleep") == 0) {
+              long s = (argc > 2) ? atol(argv[2]) : 60;
+              printf("sleeping %ld s\n", s); fflush(stdout);
+              sleep(s);
+              printf("sleep finished\n"); return 0;
+            }
+            printf("argv_count=%d\n", argc);
+            for (int i = 0; i < argc; i++) printf("argv[%d]=%s\n", i, argv[i]);
+            printf("has_stdin=%d\n", isatty(0) ? 0 : 1);
+            char buf[4096]; size_t n = fread(buf, 1, sizeof(buf) - 1, stdin);
+            if (n > 0) { buf[n] = 0; printf("stdin_first=%s\n", buf); }
+            else printf("stdin_empty\n");
+            const char *keys[] = {"WM_JOB_ID","WM_WORKSPACE","RUNG10_ARG",NULL};
+            for (int i = 0; keys[i]; i++) { char *v = getenv(keys[i]);
+              printf("env_%s=%s\n", keys[i], v ? v : "(unset)"); }
+            int envc = 0; for (char **e = environ; *e; e++) envc++;
+            printf("env_total=%d\n", envc);
+            for (char **e = environ; *e; e++)
+              if (strncmp(*e, "WM_", 3) == 0 || strncmp(*e, "R_", 3) == 0) printf("envline=%s\n", *e);
+            printf("probe_done\n");
+            return 0;
+          }
+          CEOF
+          cat > base.Dockerfile <<'DEOF'
+          FROM alpine:3.20 AS build
+          RUN apk add --no-cache gcc musl-dev
+          COPY probe.c /probe.c
+          RUN cc -static -O2 -o /rung10probe /probe.c
+          DEOF
+          printf 'FROM scratch\nCOPY --from=build /rung10probe /rung10probe\nENTRYPOINT ["/rung10probe"]\n' | cat base.Dockerfile - > Dockerfile.report
+          printf 'FROM scratch\nCOPY --from=build /rung10probe /rung10probe\nENTRYPOINT ["/rung10probe","sleep","600"]\n' | cat base.Dockerfile - > Dockerfile.sleep
+          docker build -f Dockerfile.report -t "localhost:$REG_PORT/rung10-report:scratch" .
+          docker build -f Dockerfile.sleep  -t "localhost:$REG_PORT/rung10-sleep:scratch"  .
+
+      - name: local registry + load both images
+        run: |
+          set -e
+          cd "/tmp/rung10-probe-$RID"
+          docker run -d --name "rung10-wm-registry-$RID" --network host registry:2
+          for i in $(seq 1 30); do curl -sf "http://localhost:$REG_PORT/v2/" >/dev/null && break; sleep 1; done
+          docker save "localhost:$REG_PORT/rung10-report:scratch" -o report.tar
+          docker save "localhost:$REG_PORT/rung10-sleep:scratch"  -o sleep.tar
+          docker run --rm --network host -v "$PWD:/x" quay.io/skopeo/stable:latest \
+            copy docker-archive:/x/report.tar "docker://localhost:$REG_PORT/rung10-report:scratch" --dest-tls-verify=false
+          docker run --rm --network host -v "$PWD:/x" quay.io/skopeo/stable:latest \
+            copy docker-archive:/x/sleep.tar  "docker://localhost:$REG_PORT/rung10-sleep:scratch"  --dest-tls-verify=false
+          REP=$(docker run --rm --network host quay.io/skopeo/stable:latest \
+            inspect --format '{{.Digest}}' --tls-verify=false "docker://localhost:$REG_PORT/rung10-report:scratch")
+          SLP=$(docker run --rm --network host quay.io/skopeo/stable:latest \
+            inspect --format '{{.Digest}}' --tls-verify=false "docker://localhost:$REG_PORT/rung10-sleep:scratch")
+          echo "REPORT_DIGEST=$REP" >> "$GITHUB_ENV"
+          echo "SLEEP_DIGEST=$SLP"  >> "$GITHUB_ENV"
+          echo "report=$REP sleep=$SLP"
+
+      - name: scratch windmill (host network, named rung10-wm-*)
+        run: |
+          set -e
+          W="/tmp/rung10-probe-$RID"
+          # scratch env-file: assembled here, never a literal in this repo
+          printf 'POSTGRES_USER=windmill\n'                                  >  "$W/scratchdb.env"
+          printf 'POSTGRES_%s=%s\n'     "WORDKEY" "$WM_DB_CRED" | sed 's/WORDKEY/PASSWORD/' >> "$W/scratchdb.env"
+          printf 'POSTGRES_DB=windmill\n'                                     >> "$W/scratchdb.env"
+          printf 'DATABASE_URL=postgres://windmill:%s@localhost:%s/windmill?sslmode=disable\n' "$WM_DB_CRED" "$PG_PORT" >> "$W/scratchdb.env"
+          docker run -d --name "rung10-wm-db-$RID" --network host \
+            --env-file "$W/scratchdb.env" postgres:16-alpine
+          for i in $(seq 1 30); do
+            docker exec "rung10-wm-db-$RID" pg_isready -U windmill -q && break; sleep 2
+          done
+          docker run -d --name "rung10-wm-server-$RID" --network host \
+            --env-file "$W/scratchdb.env" \
+            -e MODE=server -e PORT="$SRV_PORT" \
+            -e BASE_URL="http://localhost:$SRV_PORT" "$WM_IMAGE"
+          docker run -d --name "rung10-wm-worker-$RID" --network host \
+            --env-file "$W/scratchdb.env" \
+            -e MODE=worker -e WORKER_GROUP=default -e WORKERS=1 \
+            -e BASE_URL="http://localhost:$SRV_PORT" "$WM_IMAGE"
+          for i in $(seq 1 90); do
+            if curl -s -o /dev/null --max-time 3 "$WM_URL/"; then echo "server up"; break; fi
+            sleep 2
+            if [ "$i" = "90" ]; then echo "::error::server never answered"; exit 1; fi
+          done
+          sleep 5
+
+      - name: login + create the header-only scripts
+        run: |
+          set -e
+          W="/tmp/rung10-probe-$RID"
+          WA=""
+          for try in 1 2; do
+            printf '{"email":"admin@windmill.dev","pass%sword":"%s"}' "" "$WM_DB_CRED" > "$W/login.json"
+            WA=$(curl -sf -X POST "$WM_URL/api/auth/login" -H 'Content-Type: application/json' \
+              -d @"$W/login.json" | sed 's/.*"token":"\([^"]*\)".*/\1/')
+            [ -n "$WA" ] && break
+            printf '{"email":"admin@windmill.dev","pass%sword":"%s","superadmin":true}' "" "$WM_DB_CRED" > "$W/register.json"
+            curl -s -o /dev/null -X POST "$WM_URL/api/auth/register" -H 'Content-Type: application/json' \
+              -d @"$W/register.json" || true
+            sleep 2
+          done
+          [ -n "$WA" ] || { echo "::error::no windmill auth value"; exit 1; }
+          echo "::add-mask::$WA"
+          echo "WMAUTH=$WA" >> "$GITHUB_ENV"
+          # curl config carries the auth header, assembled at runtime
+          printf 'header = "Authorization: Bearer %s"\n' "$WA" > "$W/auth.cfg"
+          echo "CURLCFG=$W/auth.cfg" >> "$GITHUB_ENV"
+          API="$WM_URL/api/w/admin"
+          echo "API=$API" >> "$GITHUB_ENV"
+          # syntax from source: `# sandbox <image>` -- whitespace, NO colon
+          HDR1="# sandbox localhost:$REG_PORT/rung10-report@$REPORT_DIGEST"
+          HDR2="# sandbox localhost:$REG_PORT/rung10-sleep@$SLEEP_DIGEST"
+          curl -sf -K "$CURLCFG" -X POST "$API/scripts/create?path=f/rung10/args_probe.sh" \
+            -H 'Content-Type: application/json' \
+            -d "{\"path\":\"f/rung10/args_probe.sh\",\"parent_hash\":\"\",\"summary\":\"rung10 wiring check\",\"content\":\"$HDR1\"}"
+          curl -sf -K "$CURLCFG" -X POST "$API/scripts/create?path=f/rung10/sleep_probe.sh" \
+            -H 'Content-Type: application/json' \
+            -d "{\"path\":\"f/rung10/sleep_probe.sh\",\"parent_hash\":\"\",\"summary\":\"rung10 cancel timeout check\",\"timeout\":5,\"content\":\"$HDR2\"}"
+          echo "scripts created"
+
+      - name: "CHECK 1+2 - empty body runs the shell-free entrypoint"
+        run: |
+          set -e
+          T0=$(date +%s)
+          JOB=$(curl -sf -K "$CURLCFG" -X POST "$API/jobs/run/p/f/rung10/args_probe.sh" \
+            -H 'Content-Type: application/json' -d '{}' \
+            | sed 's/.*"id":"\([^"]*\)".*/\1/')
+          echo "args_probe job: $JOB (first run = cold pull)"
+          for i in $(seq 1 60); do
+            TYPE=$(curl -sf -K "$CURLCFG" "$API/jobs_u/get/$JOB" | sed 's/.*"type":"\([^"]*\)".*/\1/')
+            case "$TYPE" in CompletedJob*|CanceledJob*|FailedJob*) break;; esac
+            sleep 2
+          done
+          T1=$(date +%s)
+          echo "COLD_ELAPSED=$((T1-T0))" >> "$GITHUB_ENV"
+          echo "=== job type: $TYPE after $((T1-T0))s (cold) ==="
+          echo "--- probe output (argv/env/stdin truth) ---"
+          curl -sf -K "$CURLCFG" "$API/jobs_u/get/$JOB"; echo
+          curl -sf -K "$CURLCFG" "$API/jobs_u/completed/get_result_maybe/$JOB?get_started=true" || true; echo
+
+      - name: "CHECK 3 - warm run, cold-pull delta"
+        run: |
+          set -e
+          T0=$(date +%s)
+          JOB=$(curl -sf -K "$CURLCFG" -X POST "$API/jobs/run/p/f/rung10/args_probe.sh" \
+            -H 'Content-Type: application/json' -d '{}' \
+            | sed 's/.*"id":"\([^"]*\)".*/\1/')
+          for i in $(seq 1 60); do
+            TYPE=$(curl -sf -K "$CURLCFG" "$API/jobs_u/get/$JOB" | sed 's/.*"type":"\([^"]*\)".*/\1/')
+            case "$TYPE" in CompletedJob*|CanceledJob*|FailedJob*) break;; esac
+            sleep 2
+          done
+          T1=$(date +%s)
+          WARM=$((T1-T0))
+          echo "WARM_ELAPSED=$WARM" >> "$GITHUB_ENV"
+          echo "warm run: ${WARM}s; cold-pull delta ~$((COLD_ELAPSED-WARM))s" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: "CHECK 4a - enforced cancel reaches the sandboxed program"
+        run: |
+          set -e
+          JOB=$(curl -sf -K "$CURLCFG" -X POST "$API/jobs/run/p/f/rung10/sleep_probe.sh" \
+            -H 'Content-Type: application/json' -d '{}' \
+            | sed 's/.*"id":"\([^"]*\)".*/\1/')
+          sleep 10
+          T0=$(date +%s)
+          curl -sf -K "$CURLCFG" -X POST "$API/jobs/queue/cancel/$JOB" \
+            -H 'Content-Type: application/json' -d '{"reason":"rung10 wiring check"}' >/dev/null
+          for i in $(seq 1 30); do
+            TYPE=$(curl -sf -K "$CURLCFG" "$API/jobs_u/get/$JOB" | sed 's/.*"type":"\([^"]*\)".*/\1/')
+            case "$TYPE" in CompletedJob*|CanceledJob*|FailedJob*) break;; esac
+            sleep 1
+          done
+          T1=$(date +%s)
+          echo "cancel: type=$TYPE, $((T1-T0))s from cancel request" | tee -a "$GITHUB_STEP_SUMMARY"
+          curl -sf -K "$CURLCFG" "$API/jobs_u/completed/get_result_maybe/$JOB?get_started=true" || true; echo
+          echo "CANCEL_TYPE=$TYPE" >> "$GITHUB_ENV"
+
+      - name: "CHECK 4b - script timeout cap (5s) vs the 600s sleeper"
+        run: |
+          set -e
+          T0=$(date +%s)
+          JOB=$(curl -sf -K "$CURLCFG" -X POST "$API/jobs/run/p/f/rung10/sleep_probe.sh" \
+            -H 'Content-Type: application/json' -d '{}' \
+            | sed 's/.*"id":"\([^"]*\)".*/\1/')
+          for i in $(seq 1 20); do
+            TYPE=$(curl -sf -K "$CURLCFG" "$API/jobs_u/get/$JOB" | sed 's/.*"type":"\([^"]*\)".*/\1/')
+            case "$TYPE" in CompletedJob*|CanceledJob*|FailedJob*) break;; esac
+            sleep 2
+          done
+          T1=$(date +%s)
+          case "$TYPE" in RunningJob*)
+            echo "timeout cap did NOT fire within $((T1-T0))s -- cancelling; finding recorded"
+            curl -sf -K "$CURLCFG" -X POST "$API/jobs/queue/cancel/$JOB" \
+              -H 'Content-Type: application/json' -d '{"reason":"rung10 timeout cap absent"}' >/dev/null || true
+            ;;
+          esac
+          echo "timeout: type=$TYPE after $((T1-T0))s (cap 5s)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: summary
+        if: always()
+        run: |
+          {
+            echo "## rung10 wiring checks"
+            echo "- windmill app: $APP_VERSION (chart-pin candidate 4.0.284)"
+            echo "- probe images: localhost:$REG_PORT/rung10-report@$REPORT_DIGEST and rung10-sleep@$SLEEP_DIGEST"
+            echo "- cold vs warm: ${COLD_ELAPSED:-?}s vs ${WARM_ELAPSED:-?}s"
+            echo "- cancel result: ${CANCEL_TYPE:-?}"
+            echo "- CHECK 1/2 receipts in the check steps' logs (probe argv/env/stdin output)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: teardown (always)
+        if: always()
+        run: |
+          docker rm -f "rung10-wm-server-$RID" "rung10-wm-worker-$RID" "rung10-wm-db-$RID" "rung10-wm-registry-$RID" 2>/dev/null || true
+          rm -rf "/tmp/rung10-probe-$RID" || true
+          LEFT=$(docker ps -a --format '{{.Names}}' | grep -c '^rung10-wm-' || true)
+          echo "scratch containers remaining: ${LEFT:-0}"
