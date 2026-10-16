@@ -987,6 +987,16 @@ jobs:
             echo "✅ PASS: Non-existent wish properly handled"
           fi
 
+          # Test 6b: Correct the wish - the correction states its type
+          echo "🌱 WISH UPDATE - Correcting test wish (steer restated, new terms):"
+          printf 'type: steer\nclaims:\n  - outcome: "chainend.shift"\n    band:\n      lo: -0.12\n      hi: -0.06\n      target: -0.09\nterms: []\nlimits:\n  exclude: []\n  maxChange: 0.4\nbudget: 2\nregime: standing\nreason: "smoke correction"\n' > wish-update.yaml
+          chmod 644 wish-update.yaml
+          run_test "Wish update (correction states its type)" docker run --rm --network host \
+            -v $(pwd):/work:ro \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            wish update --id="${WISH_ID}" --file=wish-update.yaml
+
           # Test 7: Close the wish (owner's act - release the hold)
           echo "🔒 WISH CLOSE - Closing test wish:"
           run_test "Wish close" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
@@ -1026,6 +1036,120 @@ jobs:
             echo "❌ FAIL: wish still present after 120s — async purge did not complete"
             exit 1
           fi
+
+      - name: WISH Endpoint Tests - Seek Grammar
+        run: |
+          set +e
+          source /tmp/smoke-test-helpers.sh
+          echo "🧭 Testing WISH endpoints - Seek Grammar (type + form, both stated)"
+          echo "===================================================="
+
+          CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
+          API_HOST="${{ env.API_HOST }}"
+          API_PORT="${{ env.API_PORT }}"
+
+          # Test S1: Declare a seek wish - find_best (the commissioned walk)
+          echo "🧭 SEEK DECLARE - find_best:"
+          printf 'type: "seek"\nform: "find_best"\nregion:\n  chainend.push: [-0.4, 0.4]\ncriterion: {outcome: "chainend.shift", direction: "minimize"}\nbudget: 2\ncandidates: 0\n' > wish-seek-best.yaml
+          chmod 644 wish-seek-best.yaml
+          SEEK_OUT=$(docker run --rm --network host \
+            -v $(pwd):/work:ro \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            wish declare --file=wish-seek-best.yaml 2>&1)
+          SEEK_ID=$(echo "$SEEK_OUT" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+          if [ -n "${SEEK_ID}" ]; then
+            echo "${SEEK_ID}" > /tmp/seek_best_id
+            echo "✅ PASS: Seek declare (find_best) — ${SEEK_ID}"
+          else
+            echo "❌ FAIL: Seek declare (find_best)"
+            echo "${SEEK_OUT}"
+            exit 1
+          fi
+
+          # Test S2: The list carries the seek
+          run_test "Seek list (carries the seek)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish list
+
+          # Test S3: Show the seek (event history: declared)
+          run_test "Seek show" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish show --id="${SEEK_ID}"
+
+          # Test S4: A seek without its form must be rejected
+          echo "🧪 TEST: SEEK without form (should reject):"
+          printf 'type: "seek"\nregion:\n  chainend.push: [-0.4, 0.4]\n' > wish-seek-noform.yaml
+          chmod 644 wish-seek-noform.yaml
+          if docker run --rm --network host \
+            -v $(pwd):/work:ro \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            wish declare --file=wish-seek-noform.yaml 2>&1; then
+            echo "❌ FAIL: Should have rejected a seek without its form"
+            exit 1
+          else
+            echo "✅ PASS: Seek without form properly rejected"
+          fi
+
+          # Test S6: A body without its type must be rejected
+          echo "🧪 TEST: Body without its type (should reject):"
+          printf 'claims:\n  - outcome: "chainend.shift"\n    band:\n      lo: -0.14\n      hi: -0.06\n      target: -0.10\nterms: []\n' > wish-no-type.yaml
+          chmod 644 wish-no-type.yaml
+          if docker run --rm --network host \
+            -v $(pwd):/work:ro \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            wish declare --file=wish-no-type.yaml 2>&1; then
+            echo "❌ FAIL: Should have rejected a body without its type"
+            exit 1
+          else
+            echo "✅ PASS: Body without type properly rejected"
+          fi
+
+          # Test S7: A hold carrying form must be rejected loudly
+          echo "🧪 TEST: A hold carrying form (should reject loudly):"
+          printf 'type: steer\nform: find_best\nclaims:\n  - outcome: "chainend.shift"\n    band:\n      lo: -0.14\n      hi: -0.06\n      target: -0.10\nterms: []\n' > wish-steer-form.yaml
+          chmod 644 wish-steer-form.yaml
+          if docker run --rm --network host \
+            -v $(pwd):/work:ro \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            wish declare --file=wish-steer-form.yaml 2>&1; then
+            echo "❌ FAIL: Should have rejected a hold carrying form"
+            exit 1
+          else
+            echo "✅ PASS: Hold carrying form properly rejected"
+          fi
+
+          # Test S8: Close and purge the seek — short by holder word (the
+          # suite's final registry-empty check verifies the async executor
+          # landed it; no 404 polling here)
+          echo "🧹 SEEK CLEANUP - close + purge ${SEEK_ID}:"
+          run_test "Seek close" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish close --id="${SEEK_ID}"
+          run_test "Seek purge" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure wish delete --id="${SEEK_ID}"
+
+      - name: POSITIONS Endpoint Tests - Reads Only
+        run: |
+          set +e
+          source /tmp/smoke-test-helpers.sh
+          echo "🧭 Testing POSITIONS endpoints - Reads Only"
+          echo "===================================================="
+
+          API_URL="http://${{ env.API_HOST }}:${{ env.API_PORT }}"
+          CLI_CONTAINER_IMAGE="ghcr.io/godon-dev/godon-cli:latest"
+          API_HOST="${{ env.API_HOST }}"
+          API_PORT="${{ env.API_PORT }}"
+
+          # Test P1: The standing positions answer through the api door
+          # (derived fresh on every read; rows may be empty on a fresh
+          # map - the door answering with the shape is the check)
+          echo "🧭 POSITIONS - the standing picture:"
+          run_test "Positions view (api door)" bash -c "curl -sf ${API_URL}/positions | jq -e '.positions' >/dev/null"
+
+          # Test P2: The CLI reads the same door
+          run_test "Positions read (CLI)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+            --hostname=${API_HOST} --port=${API_PORT} --insecure positions
 
       - name: Integration Stress Test - Multiple Operations
         run: |
