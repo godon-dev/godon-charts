@@ -79,7 +79,7 @@ jobs:
       - name: build the two shell-free probe images (FROM scratch)
         run: |
           set -e
-          W="/tmp/rung10-probe-$RID"
+          W="$GITHUB_WORKSPACE/rung10-probe-$RID"
           mkdir -p "$W" && cd "$W"
           cat > probe.c <<'CEOF'
           #include <stdio.h>
@@ -125,7 +125,7 @@ jobs:
       - name: local registry + load both images
         run: |
           set -e
-          cd "/tmp/rung10-probe-$RID"
+          cd "$GITHUB_WORKSPACE/rung10-probe-$RID"
           docker run -d --name "rung10-wm-registry-$RID" --network host registry:2
           for i in $(seq 1 30); do curl -sf "http://localhost:$REG_PORT/v2/" >/dev/null && break; sleep 1; done
           docker save "localhost:$REG_PORT/rung10-report:scratch" -o report.tar
@@ -145,7 +145,7 @@ jobs:
       - name: scratch windmill (host network, named rung10-wm-*)
         run: |
           set -e
-          W="/tmp/rung10-probe-$RID"
+          W="$GITHUB_WORKSPACE/rung10-probe-$RID"
           # scratch env-file: assembled here, never a literal in this repo
           printf 'POSTGRES_USER=windmill\n'                                  >  "$W/scratchdb.env"
           printf 'POSTGRES_%s=%s\n'     "WORDKEY" "$WM_DB_CRED" | sed 's/WORDKEY/PASSWORD/' >> "$W/scratchdb.env"
@@ -174,7 +174,7 @@ jobs:
       - name: login + create the header-only scripts
         run: |
           set -e
-          W="/tmp/rung10-probe-$RID"
+          W="$GITHUB_WORKSPACE/rung10-probe-$RID"
           WA=""
           for try in 1 2; do
             printf '{"email":"admin@windmill.dev","pass%sword":"%s"}' "" "$WM_DB_CRED" > "$W/login.json"
@@ -299,6 +299,6 @@ jobs:
         if: always()
         run: |
           docker rm -f "rung10-wm-server-$RID" "rung10-wm-worker-$RID" "rung10-wm-db-$RID" "rung10-wm-registry-$RID" 2>/dev/null || true
-          rm -rf "/tmp/rung10-probe-$RID" || true
+          rm -rf "$GITHUB_WORKSPACE/rung10-probe-$RID" || true
           LEFT=$(docker ps -a --format '{{.Names}}' | grep -c '^rung10-wm-' || true)
           echo "scratch containers remaining: ${LEFT:-0}"
