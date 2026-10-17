@@ -9,7 +9,7 @@
 windmill:
   windmill:
     # Windmill version aligned with the chart pin (charts/godon/values.yaml)
-    tag: "1.623.1"
+    tag: "1.835.0"
 
     # Disable LSP replicas for test environment
     lspReplicas: 0

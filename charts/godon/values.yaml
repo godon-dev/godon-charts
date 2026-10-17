@@ -23,7 +23,7 @@ godon_seeder:
   enabled: true
   image:
     repository: ghcr.io/godon-dev/godon-seeder
-    tag: 0.0.23
+    tag: 0.0.24
     pullPolicy: IfNotPresent
     pullSecret: ""
   resources:
@@ -38,9 +38,9 @@ godon_seeder:
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
   - name: CONTROLLER_VERSION
-    value: "0.59.26"
+    value: "0.60.2"
   - name: ROBOT_VERSION
-    value: "0.170.22"
+    value: "0.180.3"
   # Fresh-Windmill boot tolerance: first boot runs DB migrations
   # before the auth endpoint answers; give the seeder ~10 minutes.
   - name: SEEDER_MAX_RETRIES
@@ -56,7 +56,7 @@ windmill:
     enabled: false
   windmill:
     image: "ghcr.io/windmill-labs/windmill-full"
-    tag: "1.623.1"
+    tag: "1.835.0"
     appReplicas: 1
     lspReplicas: 1
     databaseUrl: "postgres://windmill:windmill@godon-windmill-db:5432/windmill?sslmode=disable"
