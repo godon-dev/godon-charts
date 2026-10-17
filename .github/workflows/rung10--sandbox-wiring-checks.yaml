@@ -128,12 +128,14 @@ jobs:
           cd "/tmp/rung10-probe-$RID"
           docker run -d --name "rung10-wm-registry-$RID" --network host registry:2
           for i in $(seq 1 30); do curl -sf "http://localhost:$REG_PORT/v2/" >/dev/null && break; sleep 1; done
-          docker save "localhost:$REG_PORT/rung10-report:scratch" -o report.tar
-          docker save "localhost:$REG_PORT/rung10-sleep:scratch"  -o sleep.tar
-          docker run --rm --network host -v "$PWD:/x" quay.io/skopeo/stable:latest \
-            copy docker-archive:/x/report.tar "docker://localhost:$REG_PORT/rung10-report:scratch" --dest-tls-verify=false
-          docker run --rm --network host -v "$PWD:/x" quay.io/skopeo/stable:latest \
-            copy docker-archive:/x/sleep.tar  "docker://localhost:$REG_PORT/rung10-sleep:scratch"  --dest-tls-verify=false
+          # Load by localhost docker push - NO bind mounts: the step's cwd
+          # lives under /tmp (and the runner workspace alike), invisible to
+          # the daemon's bind mounts (receipts: runs 38796962275, 39010898469
+          # - the tar+skopeo copy via -v "$PWD:/x" saw an empty /x).
+          # Registries on localhost are insecure-by-default for dockerd, so
+          # a plain push needs no mounts and no skopeo copy.
+          docker push "localhost:$REG_PORT/rung10-report:scratch"
+          docker push "localhost:$REG_PORT/rung10-sleep:scratch"
           REP=$(docker run --rm --network host quay.io/skopeo/stable:latest \
             inspect --format '{{.Digest}}' --tls-verify=false "docker://localhost:$REG_PORT/rung10-report:scratch")
           SLP=$(docker run --rm --network host quay.io/skopeo/stable:latest \
