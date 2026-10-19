@@ -889,14 +889,24 @@ jobs:
 
           # Test 7: Credential name with special characters
           echo "🧪 TEST: CREDENTIAL CREATE with special characters in name:"
-          if docker run --rm --network host \
+          SPECIAL_OUTPUT=$(docker run --rm --network host \
             -v $(pwd):/work \
             -w /work \
             "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-            credential create --file=special-chars-credential-config.yaml 2>&1; then
+            credential create --file=special-chars-credential-config.yaml 2>&1)
+          if [ $? -eq 0 ]; then
             echo "✅ PASS: Special characters accepted"
           else
             echo "✅ PASS: Special characters handled or rejected (both acceptable)"
+          fi
+          # This suite leaves nothing behind: when the create lands, its
+          # row goes in the same step (the registry-empty final runs
+          # before the always-cleanup step, so late cleaning reads red).
+          SPECIAL_ID=$(echo "${SPECIAL_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
+          if [ -n "${SPECIAL_ID}" ]; then
+            echo "Cleaning up special-chars credential: ${SPECIAL_ID}"
+            docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+              --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="${SPECIAL_ID}" || echo "Failed to delete ${SPECIAL_ID}"
           fi
           
           # Test 8: Empty credential list scenario
@@ -1305,20 +1315,23 @@ jobs:
           
           # Create multiple credentials in succession
           echo "🔨 Creating multiple credentials..."
+          : > /tmp/stress_cred_ids
           for i in {1..3}; do
             printf 'name: "stress-test-cred-%d-%s"\ncredentialType: "ssh_private_key"\ncontent: "-----BEGIN RSA PRIVATE KEY----- test key -----END RSA PRIVATE KEY-----"\n' $i "${GITHUB_RUN_ID}" > credential-stress-config-${i}.yaml
 
             chmod 644 credential-stress-config-${i}.yaml
 
             CRED_CREATED=false
+            STRESS_CRED_OUTPUT=""
             for attempt in 1 2 3; do
-              if docker run --rm --network host \
+              STRESS_CRED_OUTPUT=$(docker run --rm --network host \
                 -v $(pwd):/work \
                 -w /work \
                 -e SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
                 -e NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt \
                 "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
-                credential create --file=credential-stress-config-${i}.yaml 2>&1; then
+                credential create --file=credential-stress-config-${i}.yaml 2>&1)
+              if [ $? -eq 0 ]; then
                 CRED_CREATED=true
                 break
               else
@@ -1332,7 +1345,13 @@ jobs:
             else
               _fail "Stress credential ${i} create"
             fi
-            
+
+            # bank the created id for the in-step cleanup below
+            STRESS_CRED_ID=$(echo "${STRESS_CRED_OUTPUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || echo "")
+            if [ -n "${STRESS_CRED_ID}" ]; then
+              echo "${STRESS_CRED_ID}" >> /tmp/stress_cred_ids
+            fi
+
             sleep 2
           done
           
@@ -1341,12 +1360,25 @@ jobs:
           run_test "Credential list (post-stress)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure credential list
 
+          # This suite leaves nothing behind: the stress credentials go
+          # in the same step that created them (the registry-empty
+          # final below runs before the always-cleanup step, so late
+          # cleaning would read red).
+          if [ -s /tmp/stress_cred_ids ]; then
+            while read ID; do
+              echo "Cleaning up stress credential: ${ID}"
+              docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
+                --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="${ID}" || echo "Failed to delete ${ID}"
+            done < /tmp/stress_cred_ids
+          fi
+
           # The contract's last line: the suite leaves NOTHING behind.
           # Both registries must read empty - residue rows are exactly
           # how deletion-failed ghosts hid behind green for weeks (live
           # receipts 10-06/10-07: green smokes, 5-6 ghost rows each).
           run_test "Systemtender registry empty (no residue)" bash -c "OUT=\$(curl -sf http://${API_HOST}:${API_PORT}/systemtenders) || exit 1; ! echo \"\$OUT\" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
           run_test "Wish registry empty (no residue)" bash -c "OUT=\$(curl -sf http://${API_HOST}:${API_PORT}/wishes) || exit 1; ! echo \"\$OUT\" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
+          run_test "Credential registry empty (no residue)" bash -c "OUT=\$(docker run --rm --network host \"${CLI_CONTAINER_IMAGE}\" --hostname=${API_HOST} --port=${API_PORT} --insecure credential list 2>&1) || exit 1; ! echo \"\$OUT\" | grep -qE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
 
       - name: Verify Test Results
         if: always()
@@ -1392,39 +1424,59 @@ jobs:
           API_PORT="${{ env.API_PORT }}"
           
           # Get list of systemtenders and clean up test data
+          # (the CLI prints human text, not JSON - the old jq parse never
+          #  matched anything; read the ID:/Name: line pairs instead)
           echo "Cleaning up test systemtenders..."
           ROBOT_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list 2>/dev/null || echo "[]")
-          
+            --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender list 2>/dev/null || echo "")
+
           # Extract UUIDs of test systemtenders (those containing "stress-test" or "smoke-test")
-          echo "${ROBOT_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test")) | .id' 2>/dev/null | while read UUID; do
+          echo "${ROBOT_OUTPUT}" | awk '
+            /^  ID: /   {id = $2}
+            /^  Name: / {name = substr($0, 9)
+                         if (id != "" && name ~ /(stress-test|smoke-test)/) print id
+                         id = ""}
+          ' | while read UUID; do
             if [ -n "${UUID}" ]; then
               echo "Deleting systemtender: ${UUID}"
               docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
                 --hostname=${API_HOST} --port=${API_PORT} --insecure systemtender purge --id="${UUID}" || echo "Failed to delete ${UUID}"
             fi
           done
-          
+
           # Get list of credentials and clean up test data
+          # (same text-parse fix; name match widened to the test- family -
+          #  the adversarial special-chars row is named test-cred-special)
           echo "Cleaning up test credentials..."
           CRED_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list 2>/dev/null || echo "[]")
-          
+            --hostname=${API_HOST} --port=${API_PORT} --insecure credential list 2>/dev/null || echo "")
+
           # Extract IDs of test credentials
-          echo "${CRED_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test") or contains("systemtender-test")) | .id' 2>/dev/null | while read ID; do
+          echo "${CRED_OUTPUT}" | awk '
+            /^  ID: /   {id = $2}
+            /^  Name: / {name = substr($0, 9)
+                         if (id != "" && name ~ /test-/) print id
+                         id = ""}
+          ' | while read ID; do
             if [ -n "${ID}" ]; then
               echo "Deleting credential: ${ID}"
               docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
                 --hostname=${API_HOST} --port=${API_PORT} --insecure credential delete --id="${ID}" || echo "Failed to delete ${ID}"
             fi
           done
-          
+
           # Get list of targets and clean up test data
+          # (same text-parse fix)
           echo "Cleaning up test targets..."
           TARGET_OUTPUT=$(docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
-            --hostname=${API_HOST} --port=${API_PORT} --insecure target list 2>/dev/null || echo "[]")
-          
-          echo "${TARGET_OUTPUT}" | jq -r '.[]? | select(.name | contains("stress-test") or contains("smoke-test") or contains("systemtender-test")) | .id' 2>/dev/null | while read ID; do
+            --hostname=${API_HOST} --port=${API_PORT} --insecure target list 2>/dev/null || echo "")
+
+          echo "${TARGET_OUTPUT}" | awk '
+            /^  ID: /   {id = $2}
+            /^  Name: / {name = substr($0, 9)
+                         if (id != "" && name ~ /(stress-test|smoke-test)/) print id
+                         id = ""}
+          ' | while read ID; do
             if [ -n "${ID}" ]; then
               echo "Deleting target: ${ID}"
               docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
