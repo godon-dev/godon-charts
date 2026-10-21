@@ -57,6 +57,14 @@ windmill:
   windmill:
     image: "ghcr.io/windmill-labs/windmill-full"
     tag: "1.835.0"
+    # The chart's worker template sets RUST_LOG itself (rendered AFTER
+    # any worker-group extraEnv, so a duplicate extraEnv entry can never
+    # win). This knob is the one that reaches the worker pods — and via
+    # WHITELIST_ENVS on the robot group, the engine jobs. One
+    # instrumented window: engine crates at debug (the
+    # receiver-observation publish gate logs its skip reason at debug
+    # only), everything else at info.
+    rustLog: "info,godon_engine=debug"
     appReplicas: 1
     lspReplicas: 1
     databaseUrl: "postgres://windmill:windmill@godon-windmill-db:5432/windmill?sslmode=disable"
@@ -187,12 +195,6 @@ windmill:
           value: "robot,systemtender"
         - name: GODON_DETECTION_DEBUG
           value: "1"
-        # One instrumented window: engine crates at debug (the
-        # receiver-observation publish gate logs its skip reason at
-        # debug), everything else at info. Rides the job env via
-        # WHITELIST_ENVS below.
-        - name: RUST_LOG
-          value: "info,godon_engine=debug"
         - name: GODON_CAUSAL_URL
           value: "http://godon-causal:9091"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
