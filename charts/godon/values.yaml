@@ -38,7 +38,7 @@ godon_seeder:
   - name: WINDMILL_BASE_URL
     value: "http://windmill-app.godon.svc.cluster.local:8000/api"
   - name: CONTROLLER_VERSION
-    value: "0.60.12"
+    value: "0.60.13"
   - name: ROBOT_VERSION
     value: "0.181.0"
   # Fresh-Windmill boot tolerance: first boot runs DB migrations
