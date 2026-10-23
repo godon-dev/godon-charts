@@ -1061,7 +1061,7 @@ jobs:
 
           # Test S1: Declare a seek wish - find_best (the commissioned walk)
           echo "🧭 SEEK DECLARE - find_best:"
-          printf 'type: "seek"\nform: "find_best"\nregion:\n  chainend.push: [-0.4, 0.4]\ncriterion: {outcome: "chainend.shift", direction: "minimize"}\nbudget: 2\ncandidates: 0\n' > wish-seek-best.yaml
+          printf 'type: "seek"\ntender: "00000000-0000-0000-0000-000000000000"\nform: "find_best"\nregion:\n  chainend.push: [-0.4, 0.4]\ncriterion: {outcome: "chainend.shift", direction: "minimize"}\nbudget: 2\ncandidates: 0\n' > wish-seek-best.yaml
           chmod 644 wish-seek-best.yaml
           SEEK_OUT=$(docker run --rm --network host \
             -v $(pwd):/work:ro \
@@ -1099,6 +1099,21 @@ jobs:
             exit 1
           else
             echo "✅ PASS: Seek without form properly rejected"
+          fi
+
+          # Test S4b: A seek without its tender must be rejected
+          echo "🧪 TEST: SEEK without tender (should reject):"
+          printf 'type: "seek"\nform: "find_best"\nregion:\n  chainend.push: [-0.4, 0.4]\ncriterion: {outcome: "chainend.shift", direction: "minimize"}\nbudget: 2\ncandidates: 0\n' > wish-seek-notender.yaml
+          chmod 644 wish-seek-notender.yaml
+          if docker run --rm --network host \
+            -v $(pwd):/work:ro \
+            -w /work \
+            "${CLI_CONTAINER_IMAGE}" --hostname=${API_HOST} --port=${API_PORT} --insecure \
+            wish declare --file=wish-seek-notender.yaml 2>&1; then
+            echo "❌ FAIL: Should have rejected a seek without its tender"
+            exit 1
+          else
+            echo "✅ PASS: Seek without tender properly rejected"
           fi
 
           # Test S6: A body without its type must be rejected
