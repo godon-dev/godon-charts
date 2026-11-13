@@ -23,7 +23,7 @@ godon_seeder:
   enabled: true
   image:
     repository: ghcr.io/godon-dev/godon-seeder
-    tag: 0.0.26
+    tag: 0.0.27
     pullPolicy: IfNotPresent
     pullSecret: ""
   resources:
@@ -40,13 +40,18 @@ godon_seeder:
   - name: CONTROLLER_VERSION
     value: "0.60.21"
   - name: ROBOT_VERSION
-    value: "0.187.4"
+    value: "0.187.5"
   # Fresh-Windmill boot tolerance: first boot runs DB migrations
   # before the auth endpoint answers; give the seeder ~10 minutes.
   - name: SEEDER_MAX_RETRIES
     value: "60"
   - name: SEEDER_RETRY_DELAY
     value: "10"
+  # The config namespace (settled 2026-11-13): the ONE number charts
+  # still carries — the install-time SEED for the estate's settings
+  # tree, planted by the seeder, never read again.
+  - name: GODON_SEED_CONVERGENCE_FRACTION
+    value: "0.02"
 
 ########################################
 ## Component | Windmill Workflow Orchestration Engine
@@ -187,7 +192,7 @@ windmill:
       # Robot workers - handle long-running robot optimization jobs
       # No timeout - continuous workers with crash recovery via Optuna DB
       - name: "robot"
-        replicas: 10
+        replicas: 32
         extraEnv:
         - name: WORKER_GROUP
           value: "robot"
@@ -197,6 +202,8 @@ windmill:
           value: "1"
         - name: GODON_CAUSAL_URL
           value: "http://godon-causal:9091"
+        - name: GODON_API_URL
+          value: "http://godon-api:9090"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://godon-observability-opentelemetry-collector.godon-observability.svc.cluster.local:4318"
         - name: OTEL_SERVICE_NAME
@@ -214,7 +221,7 @@ windmill:
         - name: PUSH_METRICS_ENABLED
           value: "true"
         - name: WHITELIST_ENVS
-          value: "OTEL_EXPORTER_OTLP_ENDPOINT,OTEL_SERVICE_NAME,GODON_API_SERVICE_PORT,GODON_METADATA_DB_SERVICE_PORT,YB_TSERVER_SERVICE_SERVICE_PORT,GODON_API_SERVICE_HOST,GODON_METADATA_DB_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_PORT_TCP_YSQL_PORT,GODON_ARCHIVE_DB_SERVICE_HOST,GODON_ARCHIVE_DB_SERVICE_PORT,GODON_ARCHIVE_DB_USER,GODON_ARCHIVE_DB_PASSWORD,PUSH_GATEWAY_URL,PUSH_METRICS_ENABLED,GODON_DETECTION_DEBUG,GODON_CAUSAL_URL,RUST_LOG"
+          value: "OTEL_EXPORTER_OTLP_ENDPOINT,OTEL_SERVICE_NAME,GODON_API_SERVICE_PORT,GODON_METADATA_DB_SERVICE_PORT,YB_TSERVER_SERVICE_SERVICE_PORT,GODON_API_SERVICE_HOST,GODON_METADATA_DB_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_HOST,YB_TSERVER_SERVICE_SERVICE_PORT_TCP_YSQL_PORT,GODON_ARCHIVE_DB_SERVICE_HOST,GODON_ARCHIVE_DB_SERVICE_PORT,GODON_ARCHIVE_DB_USER,GODON_ARCHIVE_DB_PASSWORD,PUSH_GATEWAY_URL,PUSH_METRICS_ENABLED,GODON_DETECTION_DEBUG,GODON_CAUSAL_URL,GODON_API_URL,RUST_LOG"
         resources:
           requests:
             cpu: "50m"
@@ -304,7 +311,7 @@ observer:
 causal:
   image:
     repository: "ghcr.io/godon-dev/godon-causal"
-    tag: "0.22.33"
+    tag: "0.22.34"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
@@ -410,7 +417,7 @@ pushgateway:
 api:
   image:
     repository: "ghcr.io/godon-dev/godon-api"
-    tag: "0.0.36"
+    tag: "0.0.37"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
