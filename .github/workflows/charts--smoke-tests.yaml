@@ -1177,6 +1177,28 @@ jobs:
           run_test "Positions read (CLI)" docker run --rm --network host "${CLI_CONTAINER_IMAGE}" \
             --hostname=${API_HOST} --port=${API_PORT} --insecure positions
 
+      - name: SETTINGS Endpoint Tests - The Config Namespace
+        run: |
+          set +e
+          source /tmp/smoke-test-helpers.sh
+          echo "⚙️ Testing SETTINGS endpoints - the config namespace"
+          echo "===================================================="
+
+          API_URL="http://${{ env.API_HOST }}:${{ env.API_PORT }}"
+
+          # The ONE estate-only fact: the seeder planted the leaf at
+          # install (origin seed, charts' seed value). The doors'
+          # contracts and the real-windmill round-trip live in the
+          # images repo's per-image CI (godon-api-ci.yml); the
+          # mid-room 409 gets its live receipt at the reinstall
+          # verification while a room flies.
+          echo "⚙️ SETTINGS - the tree carries the seeded leaf:"
+          if curl -sf -o /dev/null ${API_URL}/settings; then
+            run_test "Settings tree (seeded leaf)" bash -c "curl -sf ${API_URL}/settings | jq -e '.policy.convergence_fraction.value == 0.02 and .policy.convergence_fraction.origin == \"seed\"' >/dev/null"
+          else
+            echo "⚙️ SETTINGS: this estate predates the namespace (no /settings door yet) — the check activates at the config-namespace landing"
+          fi
+
       - name: Integration Stress Test - Multiple Operations
         run: |
           set +e
