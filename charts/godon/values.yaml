@@ -417,7 +417,7 @@ pushgateway:
 api:
   image:
     repository: "ghcr.io/godon-dev/godon-api"
-    tag: "0.0.37"
+    tag: "0.0.38"
     pullPolicy: IfNotPresent
     pullSecret: ""
 
